@@ -1,5 +1,5 @@
 use std::process::Command;
-use std::{thread, time};
+use std::{thread, time, str};
 use std::io::prelude::*;
 use std::io::stdin;
 use std::net::TcpStream;
@@ -35,102 +35,85 @@ pub fn spawn_env() {
    let (tx, rx) = channel();
    let tx_1 = tx.clone();
 
-	let send_loop = thread::spawn(move || {
-		loop {
-			// Send loop
-			let message: Message = match rx.recv() {
-				Ok(m) => m,
-				Err(e) => {
-					println!("Send Loop: {:?}", e);
-					return;
-				}
-			};
-			match message.opcode {
-				Type::Close => {
-					let _ = sender.send_message(&message);
-					// If it's a close message, just send it and then return.
-					return;
-				},
-				_ => (),
-			}
-			// Send the message
-			match sender.send_message(&message) {
-				Ok(()) => (),
-				Err(e) => {
-					println!("Send Loop: {:?}", e);
-					let _ = sender.send_message(&Message::close());
-					return;
-				}
-			}
-		}
-	});
+   let send_loop = thread::spawn(move || {
+      loop {
+         // Send loop
+         let message: Message = match rx.recv() {
+            Ok(m) => m,
+            Err(e) => {
+               println!("Send Loop: {:?}", e);
+               return;
+            }
+         };
+         match message.opcode {
+            Type::Close => {
+               let _ = sender.send_message(&message);
+               // If it's a close message, just send it and then return.
+               return;
+            },
+            _ => (),
+          }
+          // Send the message
+          match sender.send_message(&message) {
+             Ok(()) => (),
+             Err(e) => {
+                println!("Send Loop: {:?}", e);
+                let _ = sender.send_message(&Message::close());
+                return;
+             }
+          }
+       }
+   });
 
-	let receive_loop = thread::spawn(move || {
-		// Receive loop
-		for message in receiver.incoming_messages() {
-			let message: Message = match message {
-				Ok(m) => m,
-				Err(e) => {
-					println!("Receive Loop: {:?}", e);
-					let _ = tx_1.send(Message::close());
-					return;
-				}
-			};
-			match message.opcode {
-				Type::Close => {
-					// Got a close message, so send a close message and return
-					let _ = tx_1.send(Message::close());
-					return;
-				}
-				Type::Ping => match tx_1.send(Message::pong(message.payload)) {
-					// Send a pong in response
-					Ok(()) => (),
-					Err(e) => {
-						println!("Receive Loop: {:?}", e);
-						return;
-					}
-				},
-				// Say what we received
-				_ => println!("Receive Loop: {:?}", message),
-			}
-		}
-	});
+   let receive_loop = thread::spawn(move || {
+      // Receive loop
+      for message in receiver.incoming_messages() {
+         let message: Message = match message {
+            Ok(m) => m,
+            Err(e) => {
+               println!("Receive Loop: {:?}", e);
+               let _ = tx_1.send(Message::close());
+               return;
+            }
+         };
+         match message.opcode {
+            Type::Close => {
+               // Got a close message, so send a close message and return
+               let _ = tx_1.send(Message::close());
+               return;
+            }
+            Type::Ping => match tx_1.send(Message::pong(message.payload)) {
+               // Send a pong in response
+               Ok(()) => (),
+               Err(e) => {
+                  println!("Receive Loop: {:?}", e);
+                  return;
+               }
+            },
+            Type::Text => {
+               let bytes = message.payload.into_owned();
+               let msg = String::from_utf8(bytes).unwrap();
+               println!("Received message from rewarder: {}", msg);
+            },
+            // Say what we received
+            _ => println!("Receive Loop: {:?}", message),
+         }
+      }
+   });
 
-	loop {
-		let mut input = String::new();
+   let reset_cmd = b"{\"method\":\"v0.env.reset\",\"body\":{\"seed\":1,\"env_id\":\"HarvestDay-v0\",\"fps\":5},\"headers\":{}}";
+   let message = Message::ping(reset_cmd.to_vec());
+   match tx.send(message) {
+      Ok(()) => (),
+      Err(e) => {
+         println!("Main Loop: {:?}", e);
+      }
+   }
 
-		stdin().read_line(&mut input).unwrap();
-
-		let trimmed = input.trim();
-
-		let message = match trimmed {
-			"/close" => {
-				// Close the connection
-				let _ = tx.send(Message::close());
-				break;
-			}
-			// Send a ping
-			"/ping" => Message::ping(b"PING".to_vec()),
-			// Otherwise, just send text
-			_ => Message::text(trimmed.to_string()),
-		};
-
-		match tx.send(message) {
-			Ok(()) => (),
-			Err(e) => {
-				println!("Main Loop: {:?}", e);
-				break;
-			}
-		}
-	}
-
-	// We're exiting
-
-	println!("Waiting for child threads to exit");
-
-	let _ = send_loop.join();
-	let _ = receive_loop.join();
-
-	println!("Exited");
+   // We're exiting
+   println!("Waiting for child threads to exit");
+   let _ = send_loop.join();
+   let _ = receive_loop.join();
+   println!("Exited");
 
 }
