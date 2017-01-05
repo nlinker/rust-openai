@@ -3,5 +3,9 @@ name = "rust_openai"
 version = "0.0.1"
 authors = ["Andrew <andrew@subarctic.org>"]
 
+[dependencies]
+hyper = ">=0.7, <0.10"
+
 [dependencies.websocket]
 git = "https://github.com/cyderize/rust-websocket.git"
+

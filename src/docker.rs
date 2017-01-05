@@ -1,15 +1,20 @@
 use std::process::Command;
 use std::{thread, time, str};
+use std::string::String;
 use std::io::prelude::*;
 use std::io::stdin;
 use std::net::TcpStream;
 use std::sync::mpsc::channel;
 
+extern crate hyper;
+use self::hyper::header::{Headers, Authorization, Basic};
+
 extern crate websocket;
 use self::websocket::{Message, Sender, Receiver};
-use self::websocket::message::Type;
 use self::websocket::client::request::Url;
+use self::websocket::client::Request;
 use self::websocket::Client;
+use self::websocket::header::extensions::Extension;
 
 pub fn spawn_env() {
    let s = Command::new("docker")
@@ -24,8 +29,16 @@ pub fn spawn_env() {
    let url = Url::parse("ws://127.0.0.1:15900").unwrap();
    println!("Connecting to {}", url);
 
-   let request = Client::connect(url).unwrap();
-   let response = request.send().unwrap(); // Send the request and retrieve a response
+   let mut request = Client::connect(url).unwrap();
+
+   let mut auth_header = self::hyper::header::Authorization(
+      self::hyper::header::Basic {
+         username: "openai".to_owned(),
+         password: Some("openai".to_owned())
+      }
+   );
+   request.headers.set(auth_header);
+   let mut response = request.send().unwrap(); // Send the request and retrieve a response
    println!("Validating response...");
 
    response.validate().unwrap(); // Validate the response
@@ -46,7 +59,7 @@ pub fn spawn_env() {
             }
          };
          match message.opcode {
-            Type::Close => {
+            websocket::message::Type::Close => {
                let _ = sender.send_message(&message);
                // If it's a close message, just send it and then return.
                return;
@@ -77,12 +90,12 @@ pub fn spawn_env() {
             }
          };
          match message.opcode {
-            Type::Close => {
+            websocket::message::Type::Close => {
                // Got a close message, so send a close message and return
                let _ = tx_1.send(Message::close());
                return;
             }
-            Type::Ping => match tx_1.send(Message::pong(message.payload)) {
+            websocket::message::Type::Ping => match tx_1.send(Message::pong(message.payload)) {
                // Send a pong in response
                Ok(()) => (),
                Err(e) => {
@@ -90,7 +103,7 @@ pub fn spawn_env() {
                   return;
                }
             },
-            Type::Text => {
+            websocket::message::Type::Text => {
                let bytes = message.payload.into_owned();
                let msg = String::from_utf8(bytes).unwrap();
                println!("Received message from rewarder: {}", msg);
@@ -101,8 +114,9 @@ pub fn spawn_env() {
       }
    });
 
-   let reset_cmd = b"{\"method\":\"v0.env.reset\",\"body\":{\"seed\":1,\"env_id\":\"HarvestDay-v0\",\"fps\":5},\"headers\":{}}";
-   let message = Message::ping(reset_cmd.to_vec());
+   
+   let reset_cmd = "authorization: Basic openai:openai\r\n{\"method\":\"v0.env.reset\",\"body\":{\"seed\":1,\"env_id\":\"HarvestDay-v0\",\"fps\":5},\"headers\":{}}";
+   let message = Message::text(String::from(reset_cmd));
    match tx.send(message) {
       Ok(()) => (),
       Err(e) => {
