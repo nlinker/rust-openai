@@ -16,6 +16,13 @@ use self::websocket::client::Request;
 use self::websocket::Client;
 use self::websocket::header::extensions::Extension;
 
+extern crate mpeg_encoder;
+
+fn write_to_mpeg() {
+   let mut e = mpeg_encoder::Encoder::new("a.mpeg", 1, 1);
+   e.encode_rgb(1, 1, &[0], false);
+}
+
 pub fn spawn_env() {
    let s = Command::new("docker")
             .arg("run")
@@ -123,6 +130,8 @@ pub fn spawn_env() {
          println!("Main Loop: {:?}", e);
       }
    }
+
+   write_to_mpeg();
 
    // We're exiting
    println!("Waiting for child threads to exit");
