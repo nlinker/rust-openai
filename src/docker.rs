@@ -115,7 +115,7 @@ pub fn spawn_env() {
    });
 
    
-   let reset_cmd = "authorization: Basic openai:openai\r\n{\"method\":\"v0.env.reset\",\"body\":{\"seed\":1,\"env_id\":\"HarvestDay-v0\",\"fps\":5},\"headers\":{}}";
+   let reset_cmd = "{\"method\":\"v0.env.reset\",\"body\":{\"seed\":1,\"env_id\":\"flashgames.HarvestDay-v0\",\"fps\":10},\"headers\":{\"sent_at\":0,\"episode_id\":0,\"message_id\":0}}";
    let message = Message::text(String::from(reset_cmd));
    match tx.send(message) {
       Ok(()) => (),
