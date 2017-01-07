@@ -16,11 +16,32 @@ use self::websocket::client::Request;
 use self::websocket::Client;
 use self::websocket::header::extensions::Extension;
 
-extern crate mpeg_encoder;
-
-fn write_to_mpeg() {
-   let mut e = mpeg_encoder::Encoder::new("a.mpeg", 1, 1);
-   e.encode_rgb(1, 1, &[0], false);
+struct Agent {
+}
+struct Gym {
+   fps: u32,
+   env_id: String,
+   max_parallel: u32,
+   num_games: u32,
+   record: bool,
+   record_dst: str
+}
+impl Gym {
+   fn parse_args(&mut self) -> () {}
+   fn set_fps(&mut self, fps: u32) -> () { self.fps = fps }
+   fn set_game(&mut self, game: String) -> () { self.env_id = game }
+   fn set_max_parallel(&mut self, par: u32) -> () { self.max_parallel = par }
+   fn set_num_games(&mut self, num: u32) -> () { self.num_games = num }
+   fn start(&mut self, agent: Agent) -> () {
+      //TODO
+      //spawn dockers
+      //connect to vnc and rewarder
+      //start playing
+      //start recording results to movie
+      //wait
+      //stop
+      //cleanup
+   }
 }
 
 pub fn spawn_env() {
@@ -122,7 +143,7 @@ pub fn spawn_env() {
    });
 
    
-   let reset_cmd = "{\"method\":\"v0.env.reset\",\"body\":{\"seed\":1,\"env_id\":\"gym-core.Amidar-v0\",\"fps\":10},\"headers\":{\"sent_at\":0,\"episode_id\":0,\"message_id\":0}}";
+   let reset_cmd = "{\"method\":\"v0.env.reset\",\"body\":{\"seed\":1,\"env_id\":\"gym-core.AirRaid-v0\",\"fps\":60},\"headers\":{\"sent_at\":0,\"episode_id\":0,\"message_id\":0}}";
    let message = Message::text(String::from(reset_cmd));
    match tx.send(message) {
       Ok(()) => (),
@@ -130,8 +151,6 @@ pub fn spawn_env() {
          println!("Main Loop: {:?}", e);
       }
    }
-
-   write_to_mpeg();
 
    // We're exiting
    println!("Waiting for child threads to exit");
