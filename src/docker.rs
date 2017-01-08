@@ -16,23 +16,32 @@ use self::websocket::client::Request;
 use self::websocket::Client;
 use self::websocket::header::extensions::Extension;
 
-struct Agent {
+pub struct Agent {
 }
-struct Gym {
+pub struct Gym {
    fps: u32,
    env_id: String,
    max_parallel: u32,
    num_games: u32,
-   record: bool,
-   record_dst: str
+   record_dst: String
 }
 impl Gym {
-   fn parse_args(&mut self) -> () {}
-   fn set_fps(&mut self, fps: u32) -> () { self.fps = fps }
-   fn set_game(&mut self, game: String) -> () { self.env_id = game }
-   fn set_max_parallel(&mut self, par: u32) -> () { self.max_parallel = par }
-   fn set_num_games(&mut self, num: u32) -> () { self.num_games = num }
-   fn start(&mut self, agent: Agent) -> () {
+   pub fn parse_args(&mut self) -> () {}
+   pub fn set_fps(&mut self, fps: u32) -> () { self.fps = fps }
+   pub fn set_game(&mut self, game: String) -> () { self.env_id = game.to_string() }
+   pub fn set_max_parallel(&mut self, par: u32) -> () { self.max_parallel = par }
+   pub fn set_num_games(&mut self, num: u32) -> () { self.num_games = num }
+   pub fn set_record(&mut self, dst: String) -> () { self.record_dst = dst.to_string() }
+   pub fn new() -> Gym {
+      Gym {
+         fps: 60,
+         env_id: "".to_string(),
+         max_parallel: 1,
+         num_games: 1,
+         record_dst: "".to_string()
+      }
+   }
+   pub fn start(&mut self, agent: Agent) -> () {
       //TODO
       //spawn dockers
       //connect to vnc and rewarder
@@ -40,7 +49,7 @@ impl Gym {
       //start recording results to movie
       //wait
       //stop
-      //cleanup
+      //cleanup dockers etc.
    }
 }
 
