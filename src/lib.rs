@@ -36,7 +36,7 @@ pub struct GymEnv {
    close : fn () -> ()
 }
 pub trait GymMember {
-   fn start (&mut self, GymShape) -> ();
+   fn start (&mut self, GymShape) -> (&mut GymMember);
    fn reward (&mut self, gym_reward,gym_done) -> ();
    fn reset (&mut self) -> ();
    fn close (&mut self) -> ();
@@ -149,7 +149,38 @@ impl Gym {
             //connect to vnc and rewarder
             //start playing
             //start recording results to movie
-            
+
+            loop {
+               //let agent = agent.start();
+               //connect to vnc
+
+               for message in receiver.incoming_messages() {
+                  let message: Message = match message {
+                     Ok(m) => m,
+                     Err(e) => {
+                        //agent.close()
+                        return;
+                     }
+                  };
+                  match message.opcode {
+                     websocket::message::Type::Close => {
+                        //agent.close()
+                        return;
+                     },
+                     websocket::message::Type::Ping => { 
+                        let mut pong_message = Message::pong(message.payload);
+                        sender.send_message(&pong_message);
+                     },
+                     websocket::message::Type::Text => {
+                        let bytes = message.payload.into_owned();
+                        let msg = String::from_utf8(bytes).unwrap();
+                        println!("Received message from rewarder: {}", msg);
+                     },
+                     _ => {}
+                  }
+               }
+
+            }
          }));
       }
 
@@ -164,39 +195,6 @@ impl Gym {
 
 /*
 pub fn spawn_env() {
-
-   let (tx, rx) = channel();
-   let tx_1 = tx.clone();
-
-   let send_loop = thread::spawn(move || {
-      loop {
-         // Send loop
-         let message: Message = match rx.recv() {
-            Ok(m) => m,
-            Err(e) => {
-               println!("Send Loop: {:?}", e);
-               return;
-            }
-         };
-         match message.opcode {
-            websocket::message::Type::Close => {
-               let _ = sender.send_message(&message);
-               // If it's a close message, just send it and then return.
-               return;
-            },
-            _ => (),
-          }
-          // Send the message
-          match sender.send_message(&message) {
-             Ok(()) => (),
-             Err(e) => {
-                println!("Send Loop: {:?}", e);
-                let _ = sender.send_message(&Message::close());
-                return;
-             }
-          }
-       }
-   });
 
    let receive_loop = thread::spawn(move || {
       // Receive loop
