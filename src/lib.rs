@@ -88,8 +88,25 @@ impl Gym {
       }
    }
    pub fn start(&mut self, agent: GymMember) -> () {
+
+      for pi in 0..self.max_parallel {
+         let base_vnc = 5900 + pi;
+         let base_rec = 15900 + pi;
+         let ecode = Command::new("docker")
+                 .arg("run")
+                 .arg("-p").arg( format!("5900:{}", base_vnc) )
+                 .arg("-p").arg( format!("15900:{}", base_rec) )
+                 .arg("quay.io/openai/universe.gym-core:0.20.0")
+                 .status()
+                 .expect("failed to execute docker run. Is docker installed?");
+         if ecode.success() {
+             print!("spawned docker process at {} / {}", base_vnc, base_rec);
+         } else {
+             panic!("Unable to spawn docker process at {} / {}. Have you checked for zombies?", base_vnc, base_rec);
+         }
+      }
+
       //TODO
-      //spawn dockers
       //connect to vnc and rewarder
       //start playing
       //start recording results to movie
@@ -100,14 +117,6 @@ impl Gym {
 }
 
 pub fn spawn_env() {
-   let s = Command::new("docker")
-            .arg("run")
-            .arg("-p").arg("5900:5900")
-            .arg("-p").arg("15900:15900")
-            .arg("quay.io/openai/universe.gym-core:0.20.0")
-            .spawn();
-   print!("{}", "spawned docker process at 5900 / 15900");
-   thread::sleep(time::Duration::from_millis(5000));
 
    let url = Url::parse("ws://127.0.0.1:15900").unwrap();
    println!("Connecting to {}", url);
