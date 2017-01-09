@@ -19,10 +19,10 @@ use self::websocket::header::extensions::Extension;
 
 use std::collections::HashMap;
 
-type gym_reward = f64;
-type gym_done = bool;
-type gym_range = Vec<usize>;
-type gym_point = Vec<u64>;
+pub type gym_reward = f64;
+pub type gym_done = bool;
+pub type gym_range = Vec<usize>;
+pub type gym_point = Vec<u64>;
 pub struct GymShape {
    action_space: gym_range,
    observation_space: gym_range,
@@ -35,11 +35,11 @@ pub struct GymEnv {
    reset : fn () -> (),
    close : fn () -> ()
 }
-pub struct GymMember {
-   start : fn (GymShape) -> (),
-   reward : fn (gym_reward,gym_done) -> (),
-   reset : fn () -> (),
-   close : fn () -> ()
+pub trait GymMember {
+   fn start (&mut self, GymShape) -> ();
+   fn reward (&mut self, gym_reward,gym_done) -> ();
+   fn reset (&mut self) -> ();
+   fn close (&mut self) -> ();
 }
 
 pub struct Gym {
@@ -87,7 +87,7 @@ impl Gym {
          record_dst: "".to_string()
       }
    }
-   pub fn start(&mut self, agent: GymMember) -> () {
+   pub fn start<T: GymMember>(&mut self, agent: T) -> () {
 
       for pi in 0..self.max_parallel {
          let base_vnc = 5900 + pi;

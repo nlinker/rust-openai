@@ -1,11 +1,16 @@
 extern crate rust_openai;
-use rust_openai::docker;
 
-
+struct NullGymMember;
+impl rust_openai::GymMember for NullGymMember {
+   fn start (&mut self, s: rust_openai::GymShape) {}
+   fn reward(&mut self, r: rust_openai::gym_reward, d: rust_openai::gym_done) {}
+   fn reset(&mut self) {}
+   fn close(&mut self) {}
+}
 
 fn main() {
-   let a = rust_openai::docker::Agent{};
-   let mut d = rust_openai::docker::Gym::new();
+   let mut m = NullGymMember{};
+   let mut d = rust_openai::Gym::new();
    d.parse_args();
-   d.start(a);
+   d.start(m);
 }
