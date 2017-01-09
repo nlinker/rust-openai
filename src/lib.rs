@@ -123,37 +123,48 @@ impl Gym {
          if !ok { panic!("Unable to confirm connectivity to docker #{}", pi) }
          else { println!("Confirmed connectivity to docker #{}", pi); }
       }
+
+      let mut threads = Vec::new();
+      for pi in 0..self.max_parallel {
+         threads.push(thread::spawn(move || {
+
+            let url = Url::parse(&format!("ws://127.0.0.1:{}", 15900+pi)[..]).unwrap();
+            println!("Connecting to rewarder at {}", url);
+            let mut request = Client::connect(url).unwrap();
+
+            let mut auth_header = self::hyper::header::Authorization(
+               self::hyper::header::Basic {
+                  username: "openai".to_owned(),
+                 password: Some("openai".to_owned())
+               }
+            );
+
+            request.headers.set(auth_header);
+            let mut response = request.send().unwrap(); // Send the request and retrieve a response
+            response.validate().unwrap(); // Validate the response
+            let (mut sender, mut receiver) = response.begin().split();
+            println!("Recorder websocket is now ready to use at {}", 15900+pi); 
+
+            //TODO
+            //connect to vnc and rewarder
+            //start playing
+            //start recording results to movie
+            
+         }));
+      }
+
+      for t in threads {
+         t.join();
+      }
+      println!("All remotes terminated. Will now cleanup remote resources.");
       //TODO
-      //connect to vnc and rewarder
-      //start playing
-      //start recording results to movie
-      //wait
-      //stop
       //cleanup dockers etc.
    }
 }
 
+/*
 pub fn spawn_env() {
 
-   let url = Url::parse("ws://127.0.0.1:15900").unwrap();
-   println!("Connecting to {}", url);
-
-   let mut request = Client::connect(url).unwrap();
-
-   let mut auth_header = self::hyper::header::Authorization(
-      self::hyper::header::Basic {
-         username: "openai".to_owned(),
-         password: Some("openai".to_owned())
-      }
-   );
-   request.headers.set(auth_header);
-   let mut response = request.send().unwrap(); // Send the request and retrieve a response
-   println!("Validating response...");
-
-   response.validate().unwrap(); // Validate the response
-   println!("Successfully connected");
-
-   let (mut sender, mut receiver) = response.begin().split();
    let (tx, rx) = channel();
    let tx_1 = tx.clone();
 
@@ -240,3 +251,4 @@ pub fn spawn_env() {
    println!("Exited");
 
 }
+*/
