@@ -123,12 +123,15 @@ impl Gym {
          if !ok { panic!("Unable to confirm connectivity to docker #{}", pi) }
          else { println!("Confirmed connectivity to docker #{}", pi); }
       }
+      let five_seconds = time::Duration::from_millis(5000);
+      thread::sleep(five_seconds);
 
       let mut threads = Vec::new();
       for pi in 0..self.max_parallel {
          threads.push(thread::spawn(move || {
 
-            let url = Url::parse(&format!("ws://127.0.0.1:{}", 15900+pi)[..]).unwrap();
+            let ws_url = &format!("ws://127.0.0.1:{}", 15900+pi)[..];
+            let url = Url::parse(ws_url).unwrap();
             println!("Connecting to rewarder at {}", url);
             let mut request = Client::connect(url).unwrap();
 
