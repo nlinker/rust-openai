@@ -200,6 +200,16 @@ impl Gym {
             let rst_msg = Message::text(String::from(reset_msg));
             sender.send_message(&rst_msg);
 
+            //connect vnc
+            let vnc_addr: SocketAddr = format!("127.0.0.1:{}", 5900+pi).parse().expect("Unable to parse socket address");
+            let stream = match std::net::TcpStream::connect(vnc_addr) {
+               Ok(stream) => stream,
+               Err(error) => {
+                  panic!("cannot connect to localhost:{}: {}", 5900+pi, error);
+                  std::process::exit(1)
+               }
+            };
+
             loop {
                //let agent = agent.start();
                //connect to vnc
