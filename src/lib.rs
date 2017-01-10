@@ -7,6 +7,8 @@ use std::net::{TcpStream, SocketAddr};
 use std::sync::mpsc::channel;
 use std::env;
 
+extern crate vnc;
+
 extern crate rustc_serialize;
 use rustc_serialize::json;
 
@@ -209,6 +211,30 @@ impl Gym {
                   std::process::exit(1)
                }
             };
+
+            let mut vnc = match vnc::Client::from_tcp_stream(stream, true, |methods| {
+               for method in methods {
+                  match method {
+                     &vnc::client::AuthMethod::Password => {
+                        let mut key = [0; 8];
+                        for (i, byte) in "openai".bytes().enumerate() {
+                           if i == 8 { break }
+                           key[i] = byte
+                        }
+                        return Some(vnc::client::AuthChoice::Password(key))
+                     }
+                     _ => ()
+                  }
+               }
+               None
+            }) {
+               Ok(vnc) => vnc,
+               Err(error) => {
+                  panic!("cannot initialize VNC session: {}", error);
+                  std::process::exit(1)
+               }
+            };
+            println!("Connected to vnc on port: {}", 5900+pi);
 
             loop {
                //let agent = agent.start();
