@@ -7,6 +7,9 @@ use std::net::{TcpStream, SocketAddr};
 use std::sync::mpsc::channel;
 use std::env;
 
+extern crate rustc_serialize;
+use rustc_serialize::json;
+
 extern crate hyper;
 use self::hyper::header::{Headers, Authorization, Basic};
 
@@ -49,6 +52,29 @@ pub struct Gym {
    num_games: u32,
    record_dst: String
 }
+
+#[derive(RustcDecodable, RustcEncodable)]
+struct RCBody {
+   seed: u32,
+   env_id: String,
+   fps: u32
+}
+
+#[derive(RustcDecodable, RustcEncodable)]
+struct RCHeaders {
+   sent_at: u32,
+   episode_id: u32,
+   message_id: u32
+}
+
+#[derive(RustcDecodable, RustcEncodable)]
+struct RewarderCommand {
+   method: String,
+   body: RCBody,
+   headers: RCHeaders
+}
+
+
 impl Gym {
    pub fn parse_args(&mut self) -> () {
       let mut prev = "".to_string();
@@ -128,6 +154,9 @@ impl Gym {
 
       let mut threads = Vec::new();
       for pi in 0..self.max_parallel {
+         let self_env_id = format!("{: <99}", self.env_id).clone();
+         let self_fps = self.fps;
+
          threads.push(thread::spawn(move || {
 
             let ws_url = &format!("ws://127.0.0.1:{}", 15900+pi)[..];
@@ -156,6 +185,21 @@ impl Gym {
             loop {
                //let agent = agent.start();
                //connect to vnc
+
+               let reset_cmd = RewarderCommand{
+                  method: "v0.env.reset".to_owned(),
+                  body: RCBody {
+                     seed: 1,
+                     env_id: self_env_id.trim().to_string(),
+                     fps: self_fps
+                  },
+                  headers: RCHeaders {
+                     sent_at: 0,
+                     episode_id: 0,
+                     message_id: 0
+                  }
+               };
+               //let message = Message::text(String::from(reset_cmd));
 
                for message in receiver.incoming_messages() {
                   let message: Message = match message {
@@ -199,45 +243,6 @@ impl Gym {
 /*
 pub fn spawn_env() {
 
-   let receive_loop = thread::spawn(move || {
-      // Receive loop
-      for message in receiver.incoming_messages() {
-         let message: Message = match message {
-            Ok(m) => m,
-            Err(e) => {
-               println!("Receive Loop: {:?}", e);
-               let _ = tx_1.send(Message::close());
-               return;
-            }
-         };
-         match message.opcode {
-            websocket::message::Type::Close => {
-               // Got a close message, so send a close message and return
-               let _ = tx_1.send(Message::close());
-               return;
-            }
-            websocket::message::Type::Ping => match tx_1.send(Message::pong(message.payload)) {
-               // Send a pong in response
-               Ok(()) => (),
-               Err(e) => {
-                  println!("Receive Loop: {:?}", e);
-                  return;
-               }
-            },
-            websocket::message::Type::Text => {
-               let bytes = message.payload.into_owned();
-               let msg = String::from_utf8(bytes).unwrap();
-               println!("Received message from rewarder: {}", msg);
-            },
-            // Say what we received
-            _ => println!("Receive Loop: {:?}", message),
-         }
-      }
-   });
-
-   
-   let reset_cmd = "{\"method\":\"v0.env.reset\",\"body\":{\"seed\":1,\"env_id\":\"gym-core.AirRaid-v0\",\"fps\":60},\"headers\":{\"sent_at\":0,\"episode_id\":0,\"message_id\":0}}";
-   let message = Message::text(String::from(reset_cmd));
    match tx.send(message) {
       Ok(()) => (),
       Err(e) => {

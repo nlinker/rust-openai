@@ -6,6 +6,7 @@ authors = ["Andrew <andrew@subarctic.org>"]
 [dependencies]
 hyper = ">=0.7, <0.10"
 vnc = "0.4"
+rustc-serialize = "*"
 
 [dependencies.websocket]
 git = "https://github.com/cyderize/rust-websocket.git"
