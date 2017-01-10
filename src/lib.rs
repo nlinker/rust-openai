@@ -107,7 +107,7 @@ impl Gym {
    pub fn new() -> Gym {
       Gym {
          fps: 60,
-         env_id: "".to_string(),
+         env_id: "gym-core.AirRaid-v0".to_string(),
          max_parallel: 1,
          num_games: 1,
          record_dst: "".to_string()
@@ -182,24 +182,27 @@ impl Gym {
             //start playing
             //start recording results to movie
 
+            let reset_cmd = RewarderCommand{
+               method: "v0.env.reset".to_owned(),
+               body: RCBody {
+                  seed: 1,
+                  env_id: self_env_id.trim().to_string(),
+                  fps: self_fps
+               },
+               headers: RCHeaders {
+                  sent_at: 0,
+                  episode_id: 0,
+                  message_id: 0
+               }
+            };
+            let reset_msg = json::encode(&reset_cmd).unwrap();
+            println!("Send reset json message to rewarder: {}", reset_msg);
+            let rst_msg = Message::text(String::from(reset_msg));
+            sender.send_message(&rst_msg);
+
             loop {
                //let agent = agent.start();
                //connect to vnc
-
-               let reset_cmd = RewarderCommand{
-                  method: "v0.env.reset".to_owned(),
-                  body: RCBody {
-                     seed: 1,
-                     env_id: self_env_id.trim().to_string(),
-                     fps: self_fps
-                  },
-                  headers: RCHeaders {
-                     sent_at: 0,
-                     episode_id: 0,
-                     message_id: 0
-                  }
-               };
-               //let message = Message::text(String::from(reset_cmd));
 
                for message in receiver.incoming_messages() {
                   let message: Message = match message {
