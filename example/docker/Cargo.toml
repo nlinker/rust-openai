@@ -4,4 +4,4 @@ version = "0.1.0"
 authors = ["andrewjohnson"]
 
 [dependencies]
-rust_openai = { path = "../../../rust-openai" }
+openai = { path = "../../../rust-openai" }
