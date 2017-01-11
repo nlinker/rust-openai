@@ -271,12 +271,17 @@ impl Gym {
             });
 
             let (mut width, mut height) = vnc.size();
+            let mut dirty = true;
             loop {
                //let agent = agent.start();
                //TODO, update screen view
                use x11::keysym::*;
                std::thread::sleep_ms(100);
-               
+               if dirty {
+                  vnc.request_update(vnc::Rect { left: 0, top: 0, width: width, height: height}, false).unwrap();
+                  dirty = false;
+               }
+
                if rand::random() {
                   vnc.send_key_event(false, XK_Right).unwrap();
                   vnc.send_key_event(true, XK_Left).unwrap();
@@ -297,6 +302,7 @@ impl Gym {
                         mask_bits
                      } => {
                         println!("received new frame from vnc connection");
+                        dirty = true;
                         /*
                         hotspot_x = new_hotspot_x;
                         hotspot_y = new_hotspot_y;
