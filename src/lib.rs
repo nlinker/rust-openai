@@ -179,7 +179,9 @@ impl Gym {
             let mut response = request.send().unwrap(); // Send the request and retrieve a response
             response.validate().unwrap(); // Validate the response
             let (mut sender, mut receiver) = response.begin().split();
-            receiver.set_nonblocking(true);
+
+            // websocket receiver nonblocking is bugged, so we'll just put it in it's own thread...
+            // receiver.set_nonblocking(true);
             println!("Recorder websocket is now ready to use at {}", 15900+pi); 
 
             //TODO
@@ -238,6 +240,36 @@ impl Gym {
             };
             println!("Connected to vnc on port: {}", 5900+pi);
 
+            //let ws have it's own thread because it doesn't play well with others
+            thread::spawn(move || {
+               for msg in receiver.incoming_messages() {
+                  let msg: Result<websocket::message::Message,_> = msg;
+                  match msg {
+                     Ok(message) => {
+                        match message.opcode {
+                           websocket::message::Type::Close => {
+                              //agent.close()
+                              println!("Connection to rewarder terminated.");
+                           },
+                           websocket::message::Type::Ping => { 
+                              let mut pong_message = Message::pong(message.payload);
+                              sender.send_message(&pong_message);
+                           },
+                           websocket::message::Type::Text => {
+                             let bytes = message.payload.into_owned();
+                             let msg = String::from_utf8(bytes).unwrap();
+                             println!("Received message from rewarder: {}", msg);
+                           },
+                           _ => {}
+                        }
+                     }
+                     Err(e) => {
+                        //if no frames available, IOError occurs
+                     }
+                  }
+               }
+            });
+
             let (mut width, mut height) = vnc.size();
             loop {
                println!("iterate event loop");
@@ -255,7 +287,7 @@ impl Gym {
                   vnc.send_key_event(true, XK_Right).unwrap();
                }
                
-               //manage vnc connection
+               //poll vnc connection for updates
                for event in vnc.poll_iter() {
                   use vnc::client::Event;
 
@@ -291,35 +323,6 @@ impl Gym {
                }
                println!("finished vnc loop poll");
                
-               //manage rewarder websocket
-               for msg in receiver.incoming_messages() {
-                  let msg: Result<websocket::message::Message,_> = msg;
-                  match msg {
-                     Ok(message) => {
-                        match message.opcode {
-                           websocket::message::Type::Close => {
-                              //agent.close()
-                              println!("Connection to rewarder terminated.");
-                           },
-                           websocket::message::Type::Ping => { 
-                              let mut pong_message = Message::pong(message.payload);
-                              sender.send_message(&pong_message);
-                           },
-                           websocket::message::Type::Text => {
-                             let bytes = message.payload.into_owned();
-                             let msg = String::from_utf8(bytes).unwrap();
-                             println!("Received message from rewarder: {}", msg);
-                           },
-                           _ => {}
-                        }
-                     }
-                     Err(e) => {
-                        //if no frames available, IOError occurs
-                     }
-                  }
-               }
-               println!("finished websocket poll");
-
             }
          }));
       }
