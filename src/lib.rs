@@ -271,6 +271,7 @@ impl Gym {
             });
 
             let (mut width, mut height) = vnc.size();
+            //let mut screen = [0; (width*height*3) as usize];
             let mut dirty = true;
             loop {
                //let agent = agent.start();
@@ -302,7 +303,20 @@ impl Gym {
                         println!("Resize Event")
                      },
                      Event::PutPixels(vnc_rect, ref pixels) => {
-                        println!("PutPixels Event")
+                        /*
+                        for y in vnc_rect.top .. (vnc_rect.top+vnc_rect.height) {
+                           for x in vnc_rect.left .. (vnc_rect.left+vnc_rect.width) {
+                              let left = 3 * (vnc_rect.top*width + vnc_rect.left);
+                              screen[left+i] = pixels[3 * (vnc_rect.width*vnc_rect.top + )]
+                           }
+                        }
+
+                        for i in 0 .. 3*vnc_rect.width*vnc_rect.height {
+                           screen[i as usize] = pixels[i as usize];
+                        }
+                        */
+                        println!("PutPixels Event: {} x {} [{},{}]", vnc_rect.width, vnc_rect.height, vnc_rect.top, vnc_rect.left);
+                        dirty = true;
                      },
                      Event::CopyPixels { src: vnc_src, dst: vnc_dst } => {
                         println!("CopyPixels Event")
@@ -319,24 +333,7 @@ impl Gym {
                         pixels,
                         mask_bits
                      } => {
-                        println!("received new frame from vnc connection");
-                        dirty = true;
-                        /*
-                        hotspot_x = new_hotspot_x;
-                        hotspot_y = new_hotspot_y;
-                        if width > 0 && height > 0 {
-                           let mut mask_pixels = Vec::new();
-                           let mask_stride = (width + 7) / 8;
-                           for y in 0..height {
-                              for x in 0..mask_stride {
-                                 let mask_byte = mask_bits[(y * mask_stride + x) as usize];
-                                 for w in 0..8 {
-                                    mask_pixels.push(mask_byte & (1 << (7 - w)))
-                                 }
-                              }
-                           }
-                        }
-                        */
+                        println!("received SetCursor Event");
                      }
                      _ => {
                         println!("Received some other message from vnc");
