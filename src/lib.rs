@@ -11,6 +11,12 @@ extern crate rand;
 extern crate x11;
 extern crate vnc;
 
+extern crate libc;
+extern crate ffmpeg_sys;
+use libc::c_void;
+use ffmpeg_sys::{SwsContext, AVCodec, AVCodecContext, AVPacket, AVFormatContext, AVStream,
+                 AVFrame, AVRational, AVPixelFormat, AVPicture, AVCodecID};
+
 extern crate rustc_serialize;
 use rustc_serialize::json;
 
@@ -270,9 +276,15 @@ impl Gym {
                }
             });
 
+
             let (mut width, mut height) = vnc.size();
-            //let mut screen = [0; (width*height*3) as usize];
+            let mut screen = Vec::with_capacity((width * height * 3) as usize);
+            for i in 0..(width * height * 3) {
+               screen.push(0 as u8);
+            }
             let mut dirty = true;
+            //let mpeg = Encoder::new( "test.mov", width as usize, height as usize );
+
             loop {
                //let agent = agent.start();
                //TODO, update screen view

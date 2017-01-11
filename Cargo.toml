@@ -8,8 +8,9 @@ rand = "*"
 hyper = ">=0.7, <0.10"
 vnc = "0.4"
 rustc-serialize = "*"
-ffmpeg = "0.2.0-alpha.1"
+ffmpeg-sys = "3.2.0"
 x11 = "2.3"
+libc = "*"
 
 [dependencies.websocket]
 git = "https://github.com/cyderize/rust-websocket.git"
