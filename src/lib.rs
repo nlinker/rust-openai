@@ -110,7 +110,7 @@ impl Gym {
    pub fn set_record(&mut self, dst: String) -> () { self.record_dst = dst.to_string() }
    pub fn new() -> Gym {
       Gym {
-         fps: 60,
+         fps: 10,
          env_id: "gym-core.AirRaid-v0".to_string(),
          max_parallel: 1,
          num_games: 1,
@@ -179,6 +179,7 @@ impl Gym {
             let mut response = request.send().unwrap(); // Send the request and retrieve a response
             response.validate().unwrap(); // Validate the response
             let (mut sender, mut receiver) = response.begin().split();
+            receiver.set_nonblocking(true);
             println!("Recorder websocket is now ready to use at {}", 15900+pi); 
 
             //TODO
@@ -213,7 +214,6 @@ impl Gym {
                   std::process::exit(1)
                }
             };
-
             let mut vnc = match vnc::Client::from_tcp_stream(stream, true, |methods| {
                for method in methods {
                   match method {
@@ -240,9 +240,12 @@ impl Gym {
 
             let (mut width, mut height) = vnc.size();
             loop {
+               println!("iterate event loop");
+
                //let agent = agent.start();
                //TODO, update screen view
                use x11::keysym::*;
+               std::thread::sleep_ms(100);
                
                if rand::random() {
                   vnc.send_key_event(false, XK_Right).unwrap();
@@ -251,32 +254,71 @@ impl Gym {
                   vnc.send_key_event(false, XK_Left).unwrap();
                   vnc.send_key_event(true, XK_Right).unwrap();
                }
+               
+               //manage vnc connection
+               for event in vnc.poll_iter() {
+                  use vnc::client::Event;
 
-               for message in receiver.incoming_messages() {
-                  let message: Message = match message {
-                     Ok(m) => m,
-                     Err(e) => {
-                        //agent.close()
-                        return;
+                  match event {
+                     Event::SetCursor {
+                        size:    (width, height),
+                        hotspot: (new_hotspot_x, new_hotspot_y),
+                        pixels,
+                        mask_bits
+                     } => {
+                        println!("received new frame from vnc connection");
+                        /*
+                        hotspot_x = new_hotspot_x;
+                        hotspot_y = new_hotspot_y;
+                        if width > 0 && height > 0 {
+                           let mut mask_pixels = Vec::new();
+                           let mask_stride = (width + 7) / 8;
+                           for y in 0..height {
+                              for x in 0..mask_stride {
+                                 let mask_byte = mask_bits[(y * mask_stride + x) as usize];
+                                 for w in 0..8 {
+                                    mask_pixels.push(mask_byte & (1 << (7 - w)))
+                                 }
+                              }
+                           }
+                        }
+                        */
                      }
-                  };
-                  match message.opcode {
-                     websocket::message::Type::Close => {
-                        //agent.close()
-                        return;
-                     },
-                     websocket::message::Type::Ping => { 
-                        let mut pong_message = Message::pong(message.payload);
-                        sender.send_message(&pong_message);
-                     },
-                     websocket::message::Type::Text => {
-                        let bytes = message.payload.into_owned();
-                        let msg = String::from_utf8(bytes).unwrap();
-                        println!("Received message from rewarder: {}", msg);
-                     },
-                     _ => {}
+                     _ => {
+                        println!("Received some other message from vnc");
+                     }
                   }
                }
+               println!("finished vnc loop poll");
+               
+               //manage rewarder websocket
+               for msg in receiver.incoming_messages() {
+                  let msg: Result<websocket::message::Message,_> = msg;
+                  match msg {
+                     Ok(message) => {
+                        match message.opcode {
+                           websocket::message::Type::Close => {
+                              //agent.close()
+                              println!("Connection to rewarder terminated.");
+                           },
+                           websocket::message::Type::Ping => { 
+                              let mut pong_message = Message::pong(message.payload);
+                              sender.send_message(&pong_message);
+                           },
+                           websocket::message::Type::Text => {
+                             let bytes = message.payload.into_owned();
+                             let msg = String::from_utf8(bytes).unwrap();
+                             println!("Received message from rewarder: {}", msg);
+                           },
+                           _ => {}
+                        }
+                     }
+                     Err(e) => {
+                        //if no frames available, IOError occurs
+                     }
+                  }
+               }
+               println!("finished websocket poll");
 
             }
          }));
