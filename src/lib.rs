@@ -7,6 +7,8 @@ use std::net::{TcpStream, SocketAddr};
 use std::sync::mpsc::channel;
 use std::env;
 
+extern crate rand;
+extern crate x11;
 extern crate vnc;
 
 extern crate rustc_serialize;
@@ -236,9 +238,19 @@ impl Gym {
             };
             println!("Connected to vnc on port: {}", 5900+pi);
 
+            let (mut width, mut height) = vnc.size();
             loop {
                //let agent = agent.start();
-               //connect to vnc
+               //TODO, update screen view
+               use x11::keysym::*;
+               
+               if rand::random() {
+                  vnc.send_key_event(false, XK_Right).unwrap();
+                  vnc.send_key_event(true, XK_Left).unwrap();
+               } else { 
+                  vnc.send_key_event(false, XK_Left).unwrap();
+                  vnc.send_key_event(true, XK_Right).unwrap();
+               }
 
                for message in receiver.incoming_messages() {
                   let message: Message = match message {
