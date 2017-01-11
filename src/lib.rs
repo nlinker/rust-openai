@@ -295,6 +295,24 @@ impl Gym {
                   use vnc::client::Event;
 
                   match event {
+                     Event::Disconnected(_) => {
+                        println!("Disconnected Event")
+                     },
+                     Event::Resize(new_width, new_height) => {
+                        println!("Resize Event")
+                     },
+                     Event::PutPixels(vnc_rect, ref pixels) => {
+                        println!("PutPixels Event")
+                     },
+                     Event::CopyPixels { src: vnc_src, dst: vnc_dst } => {
+                        println!("CopyPixels Event")
+                     },
+                     Event::EndOfFrame => {
+                        println!("End of Frame Event")
+                     },
+                     Event::Clipboard(ref text) => {
+                       println!("Clipboard Event")
+                     },
                      Event::SetCursor {
                         size:    (width, height),
                         hotspot: (new_hotspot_x, new_hotspot_y),
