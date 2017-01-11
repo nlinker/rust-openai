@@ -272,8 +272,6 @@ impl Gym {
 
             let (mut width, mut height) = vnc.size();
             loop {
-               println!("iterate event loop");
-
                //let agent = agent.start();
                //TODO, update screen view
                use x11::keysym::*;
@@ -321,7 +319,6 @@ impl Gym {
                      }
                   }
                }
-               println!("finished vnc loop poll");
                
             }
          }));
