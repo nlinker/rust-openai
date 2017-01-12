@@ -1,5 +1,8 @@
 use std::process::Command;
 use std::{thread, time, str};
+use std::fs;
+use std::fs::File;
+use std::path::Path;
 use std::string::String;
 use std::io::prelude::*;
 use std::io::stdin;
@@ -7,15 +10,13 @@ use std::net::{TcpStream, SocketAddr};
 use std::sync::mpsc::channel;
 use std::env;
 
+extern crate glob;
+use glob::glob;
+
 extern crate rand;
 extern crate x11;
 extern crate vnc;
-
-extern crate libc;
-extern crate ffmpeg_sys;
-use libc::c_void;
-use ffmpeg_sys::{SwsContext, AVCodec, AVCodecContext, AVPacket, AVFormatContext, AVStream,
-                 AVFrame, AVRational, AVPixelFormat, AVPicture, AVCodecID};
+extern crate image;
 
 extern crate rustc_serialize;
 use rustc_serialize::json;
@@ -278,16 +279,24 @@ impl Gym {
 
 
             let (mut width, mut height) = vnc.size();
-            let mut screen = Vec::with_capacity((width * height * 3) as usize);
-            for i in 0..(width * height * 3) {
-               screen.push(0 as u8);
-            }
             let mut dirty = true;
-            //let mpeg = Encoder::new( "test.mov", width as usize, height as usize );
+            let mut screen = image::ImageBuffer::new(width as u32, height as u32);
+            for entry in glob("mov_out/*.png").expect("Failed to read glob pattern") {
+               match entry {
+                  Ok(path) => {
+                    fs::remove_file(path);
+                  }
+                  Err(e) => {}
+               }
+            }
+            fs::create_dir("mov_out/");
 
+            let mut frame_i = 0;
             loop {
+               frame_i = frame_i + 1;
                //let agent = agent.start();
                //TODO, update screen view
+
                use x11::keysym::*;
                std::thread::sleep_ms(100);
                if dirty {
@@ -353,6 +362,8 @@ impl Gym {
                   }
                }
                
+               let ref mut fout = File::create(&Path::new( &format!("mov_out/frame_{}.png", frame_i)[..] )).unwrap();
+               let _ = image::ImageRgb8(screen.clone()).save(fout, image::PNG);
             }
          }));
       }
@@ -366,21 +377,3 @@ impl Gym {
    }
 }
 
-/*
-pub fn spawn_env() {
-
-   match tx.send(message) {
-      Ok(()) => (),
-      Err(e) => {
-         println!("Main Loop: {:?}", e);
-      }
-   }
-
-   // We're exiting
-   println!("Waiting for child threads to exit");
-   let _ = send_loop.join();
-   let _ = receive_loop.join();
-   println!("Exited");
-
-}
-*/

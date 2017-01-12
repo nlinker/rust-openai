@@ -4,13 +4,13 @@ version = "0.0.1"
 authors = ["Andrew <andrew@subarctic.org>"]
 
 [dependencies]
+glob = "*"
+image = "*"
 rand = "*"
 hyper = ">=0.7, <0.10"
 vnc = "0.4"
 rustc-serialize = "*"
-ffmpeg-sys = "3.2.0"
 x11 = "2.3"
-libc = "*"
 
 [dependencies.websocket]
 git = "https://github.com/cyderize/rust-websocket.git"
