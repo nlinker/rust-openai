@@ -10,7 +10,6 @@ use std::io::stdin;
 use std::net::{TcpStream, SocketAddr};
 use std::sync::mpsc::channel;
 use std::env;
-use std::hash::{Hash, SipHasher, Hasher};
 
 extern crate glob;
 use glob::glob;
@@ -311,7 +310,7 @@ impl Gym {
                //TODO, update screen view
 
                use x11::keysym::*;
-               std::thread::sleep_ms(100);
+               std::thread::sleep_ms(10);
                vnc.request_update(vnc::Rect { left: 0, top: 0, width: width, height: height}, false).unwrap();
 
                if rand::random() {
@@ -334,9 +333,6 @@ impl Gym {
                         println!("Resize Event")
                      },
                      Event::PutPixels(vnc_rect, ref pixels) => {
-                        let mut s = SipHasher::new();
-                        pixels.hash(&mut s);
-                        println!("Pixel Hash: {}", s.finish());
                         for x in vnc_rect.left .. (vnc_rect.left+vnc_rect.width) {
                            for y in vnc_rect.top .. (vnc_rect.top+vnc_rect.height) {
                               let i = x - vnc_rect.left;
