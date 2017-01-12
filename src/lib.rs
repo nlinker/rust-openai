@@ -1,6 +1,7 @@
 use std::process::Command;
 use std::{thread, time, str};
 use std::time::{Duration, SystemTime};
+use std::cmp::{max, min};
 use std::fs;
 use std::fs::File;
 use std::path::Path;
@@ -10,6 +11,7 @@ use std::io::stdin;
 use std::net::{TcpStream, SocketAddr};
 use std::sync::mpsc::channel;
 use std::env;
+use std::iter::repeat;
 
 extern crate glob;
 use glob::glob;
@@ -284,7 +286,10 @@ impl Gym {
 
 
             let (mut width, mut height) = vnc.size();
-            let mut screen = image::ImageBuffer::new(width as u32, height as u32);
+            width = min(160, width);
+            height = min(192, height);
+            let screen = &mut [0 as u8; 3 * 160 * 192]; //atari size screen
+
             for entry in glob("mov_out/*.png").expect("Failed to read glob pattern") {
                match entry {
                   Ok(path) => {
@@ -326,12 +331,17 @@ impl Gym {
                   use vnc::client::Event;
                   match event {
                      Event::PutPixels(vnc_rect, ref pixels) => {
-                        for x in vnc_rect.left .. (vnc_rect.left+vnc_rect.width) {
-                           for y in vnc_rect.top .. (vnc_rect.top+vnc_rect.height) {
+                        for x in vnc_rect.left .. min(160, (vnc_rect.left+vnc_rect.width)) {
+                           for y in vnc_rect.top .. min(192, (vnc_rect.top+vnc_rect.height)) {
                               let i = x - vnc_rect.left;
                               let j = y - vnc_rect.top;
-                              let left = 4*(j * vnc_rect.width + i) as usize;
-                              screen.put_pixel(x as u32, y as u32, image::Rgb([ pixels[left+2], pixels[left+1], pixels[left] ]));
+                              let left = 3*(j * vnc_rect.width + i) as usize;
+                              let right = 4*(j * vnc_rect.width + i) as usize;
+                              if left < (3 * 160 * 192) && pixels[right+3]>0 {
+                                 screen[left] = pixels[right];
+                                 screen[left+1] = pixels[right+1];
+                                 screen[left+2] = pixels[right+2];
+                              }
                            }
                         }
                      },
