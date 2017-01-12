@@ -297,6 +297,8 @@ impl Gym {
 
             let mut frame_i = 0;
             loop {
+               std::thread::sleep_ms(10);
+
                match now.elapsed() {
                   Ok(elapsed) => {
                      if elapsed.as_secs() > self_duration { return; }
@@ -306,13 +308,12 @@ impl Gym {
                }
 
                frame_i = frame_i + 1;
-               //let agent = agent.start();
-               //TODO, update screen view
+               println!("frame {}", frame_i);
 
                use x11::keysym::*;
-               std::thread::sleep_ms(10);
                vnc.request_update(vnc::Rect { left: 0, top: 0, width: width, height: height}, false).unwrap();
 
+               //replace with proxy to agent
                if rand::random() {
                   vnc.send_key_event(false, XK_Right).unwrap();
                   vnc.send_key_event(true, XK_Left).unwrap();
@@ -320,18 +321,10 @@ impl Gym {
                   vnc.send_key_event(false, XK_Left).unwrap();
                   vnc.send_key_event(true, XK_Right).unwrap();
                }
-               
-               //poll vnc connection for updates
+
                for event in vnc.poll_iter() {
                   use vnc::client::Event;
-
                   match event {
-                     Event::Disconnected(_) => {
-                        println!("Disconnected Event")
-                     },
-                     Event::Resize(new_width, new_height) => {
-                        println!("Resize Event")
-                     },
                      Event::PutPixels(vnc_rect, ref pixels) => {
                         for x in vnc_rect.left .. (vnc_rect.left+vnc_rect.width) {
                            for y in vnc_rect.top .. (vnc_rect.top+vnc_rect.height) {
@@ -341,6 +334,22 @@ impl Gym {
                               screen.put_pixel(x as u32, y as u32, image::Rgb([ pixels[left+2], pixels[left+1], pixels[left] ]));
                            }
                         }
+                     },
+                     _ => {}
+                  }
+               }
+
+               /*
+
+
+               
+               //poll vnc connection for updates
+
+                     Event::Disconnected(_) => {
+                        println!("Disconnected Event")
+                     },
+                     Event::Resize(new_width, new_height) => {
+                        println!("Resize Event")
                      },
                      Event::CopyPixels { src: vnc_src, dst: vnc_dst } => {
                         println!("CopyPixels Event")
@@ -366,6 +375,7 @@ impl Gym {
 
                let ref mut fout = File::create(&Path::new( &format!("mov_out/frame_{}.png", frame_i)[..] )).unwrap();
                let _ = image::ImageRgb8(screen.clone()).save(fout, image::PNG);
+               */
             }
          }));
       }
@@ -380,6 +390,7 @@ impl Gym {
                  .arg("-f").arg("image2")
                  .arg("-i").arg("mov_out/frame_%0d.png")
                  .arg("-r").arg("24")
+                 .arg("-pix_fmt").arg("yuv420p")
                  .arg(self.record_dst.clone())
                  .spawn();
 
