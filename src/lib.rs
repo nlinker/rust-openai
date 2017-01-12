@@ -1,5 +1,6 @@
 use std::process::Command;
 use std::{thread, time, str};
+use std::time::{Duration, SystemTime};
 use std::fs;
 use std::fs::File;
 use std::path::Path;
@@ -61,7 +62,7 @@ pub struct Gym {
    fps: u32,
    env_id: String,
    max_parallel: u32,
-   num_games: u32,
+   duration: u64,
    record_dst: String
 }
 
@@ -100,8 +101,8 @@ impl Gym {
          } else if prev == "--parallel" {
             self.max_parallel = argument.parse::<u32>().unwrap();
             prev = "".to_string();
-         } else if prev == "--num_games" {
-            self.num_games = argument.parse::<u32>().unwrap();
+         } else if prev == "--duration" {
+            self.duration = argument.parse::<u64>().unwrap();
             prev = "".to_string();
          } else if prev == "--record" {
             self.record_dst = argument;
@@ -114,15 +115,15 @@ impl Gym {
    pub fn set_fps(&mut self, fps: u32) -> () { self.fps = fps }
    pub fn set_game(&mut self, game: String) -> () { self.env_id = game.to_string() }
    pub fn set_max_parallel(&mut self, par: u32) -> () { self.max_parallel = par }
-   pub fn set_num_games(&mut self, num: u32) -> () { self.num_games = num }
+   pub fn set_duration(&mut self, num: u64) -> () { self.duration = num }
    pub fn set_record(&mut self, dst: String) -> () { self.record_dst = dst.to_string() }
    pub fn new() -> Gym {
       Gym {
          fps: 10,
          env_id: "gym-core.AirRaid-v0".to_string(),
          max_parallel: 1,
-         num_games: 1,
-         record_dst: "".to_string()
+         duration: 60,
+         record_dst: "video.mpg".to_string()
       }
    }
    pub fn start<T: GymMember>(&mut self, agent: T) -> () {
@@ -166,10 +167,14 @@ impl Gym {
 
       let mut threads = Vec::new();
       for pi in 0..self.max_parallel {
+
          let self_env_id = format!("{: <99}", self.env_id).clone();
          let self_fps = self.fps;
+         let self_duration = self.duration;
+         let self_record_dst = self.record_dst.clone();
 
          threads.push(thread::spawn(move || {
+            let now = SystemTime::now();
 
             let ws_url = &format!("ws://127.0.0.1:{}", 15900+pi)[..];
             let url = Url::parse(ws_url).unwrap();
@@ -293,6 +298,14 @@ impl Gym {
 
             let mut frame_i = 0;
             loop {
+               match now.elapsed() {
+                  Ok(elapsed) => {
+                     if elapsed.as_secs() > self_duration { return; }
+                  }
+                  Err(e) => {
+                  }
+               }
+
                frame_i = frame_i + 1;
                //let agent = agent.start();
                //TODO, update screen view
@@ -354,19 +367,27 @@ impl Gym {
                      }
                   }
                }
-               
+
                let ref mut fout = File::create(&Path::new( &format!("mov_out/frame_{}.png", frame_i)[..] )).unwrap();
                let _ = image::ImageRgb8(screen.clone()).save(fout, image::PNG);
             }
          }));
       }
 
+
       for t in threads {
          t.join();
       }
+
+      Command::new("ffmpeg")
+                 .arg("-r").arg( format!("{}", self.fps) )
+                 .arg("-f").arg("image2")
+                 .arg("-i").arg("mov_out/frame_%0d.png")
+                 .arg("-r").arg("24")
+                 .arg(self.record_dst.clone())
+                 .spawn();
+
       println!("All remotes terminated. Will now cleanup remote resources.");
-      //TODO
-      //cleanup dockers etc.
    }
 }
 
