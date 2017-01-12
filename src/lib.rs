@@ -9,6 +9,7 @@ use std::io::stdin;
 use std::net::{TcpStream, SocketAddr};
 use std::sync::mpsc::channel;
 use std::env;
+use std::hash::{Hash, SipHasher, Hasher};
 
 extern crate glob;
 use glob::glob;
@@ -279,7 +280,6 @@ impl Gym {
 
 
             let (mut width, mut height) = vnc.size();
-            let mut dirty = true;
             let mut screen = image::ImageBuffer::new(width as u32, height as u32);
             for entry in glob("mov_out/*.png").expect("Failed to read glob pattern") {
                match entry {
@@ -299,10 +299,7 @@ impl Gym {
 
                use x11::keysym::*;
                std::thread::sleep_ms(100);
-               if dirty {
-                  vnc.request_update(vnc::Rect { left: 0, top: 0, width: width, height: height}, false).unwrap();
-                  dirty = false;
-               }
+               vnc.request_update(vnc::Rect { left: 0, top: 0, width: width, height: height}, false).unwrap();
 
                if rand::random() {
                   vnc.send_key_event(false, XK_Right).unwrap();
@@ -324,26 +321,22 @@ impl Gym {
                         println!("Resize Event")
                      },
                      Event::PutPixels(vnc_rect, ref pixels) => {
-                        /*
-                        for y in vnc_rect.top .. (vnc_rect.top+vnc_rect.height) {
-                           for x in vnc_rect.left .. (vnc_rect.left+vnc_rect.width) {
-                              let left = 3 * (vnc_rect.top*width + vnc_rect.left);
-                              screen[left+i] = pixels[3 * (vnc_rect.width*vnc_rect.top + )]
+                        let mut s = SipHasher::new();
+                        pixels.hash(&mut s);
+                        println!("Pixel Hash: {}", s.finish());
+                        for x in vnc_rect.left .. (vnc_rect.left+vnc_rect.width) {
+                           for y in vnc_rect.top .. (vnc_rect.top+vnc_rect.height) {
+                              let i = x - vnc_rect.left;
+                              let j = y - vnc_rect.top;
+                              let left = 4*(j * vnc_rect.width + i) as usize;
+                              screen.put_pixel(x as u32, y as u32, image::Rgb([ pixels[left+2], pixels[left+1], pixels[left] ]));
                            }
                         }
-
-                        for i in 0 .. 3*vnc_rect.width*vnc_rect.height {
-                           screen[i as usize] = pixels[i as usize];
-                        }
-                        */
-                        println!("PutPixels Event: {} x {} [{},{}]", vnc_rect.width, vnc_rect.height, vnc_rect.top, vnc_rect.left);
-                        dirty = true;
                      },
                      Event::CopyPixels { src: vnc_src, dst: vnc_dst } => {
                         println!("CopyPixels Event")
                      },
                      Event::EndOfFrame => {
-                        println!("End of Frame Event")
                      },
                      Event::Clipboard(ref text) => {
                        println!("Clipboard Event")
