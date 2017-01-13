@@ -88,6 +88,8 @@ struct RewarderCommand {
    headers: RCHeaders
 }
 
+const ATARI_HEIGHT: u32 = 262;
+const ATARI_WIDTH: u32 = 160;
 
 impl Gym {
    pub fn parse_args(&mut self) -> () {
@@ -286,9 +288,8 @@ impl Gym {
 
 
             let (mut width, mut height) = vnc.size();
-            width = min(160, width);
-            height = min(192, height);
-            let screen = &mut [0 as u8; 3 * 160 * 192]; //atari size screen
+            let (mut width, mut height) = (min(ATARI_WIDTH,width as u32), min(ATARI_HEIGHT,height as u32));
+            let mut screen = image::ImageBuffer::new(width as u32, height as u32);
 
             for entry in glob("mov_out/*.png").expect("Failed to read glob pattern") {
                match entry {
@@ -316,7 +317,7 @@ impl Gym {
                println!("frame {}", frame_i);
 
                use x11::keysym::*;
-               vnc.request_update(vnc::Rect { left: 0, top: 0, width: width, height: height}, false).unwrap();
+               vnc.request_update(vnc::Rect { left: 0, top: 0, width: width as u16, height: height as u16}, false).unwrap();
 
                //replace with proxy to agent
                if rand::random() {
@@ -331,61 +332,37 @@ impl Gym {
                   use vnc::client::Event;
                   match event {
                      Event::PutPixels(vnc_rect, ref pixels) => {
-                        for x in vnc_rect.left .. min(160, (vnc_rect.left+vnc_rect.width)) {
-                           for y in vnc_rect.top .. min(192, (vnc_rect.top+vnc_rect.height)) {
+                        let mut black_screen = true;
+                        for x in vnc_rect.left .. min(ATARI_WIDTH as u16, (vnc_rect.left+vnc_rect.width)) {
+                           for y in vnc_rect.top .. min(ATARI_HEIGHT as u16, (vnc_rect.top+vnc_rect.height)) {
                               let i = x - vnc_rect.left;
                               let j = y - vnc_rect.top;
-                              let left = 3*(j * vnc_rect.width + i) as usize;
-                              let right = 4*(j * vnc_rect.width + i) as usize;
-                              if left < (3 * 160 * 192) && pixels[right+3]>0 {
-                                 screen[left] = pixels[right];
-                                 screen[left+1] = pixels[right+1];
-                                 screen[left+2] = pixels[right+2];
-                              }
+                              let left = 4*(j * vnc_rect.width + i) as usize;
+                              if pixels[left]>20 { black_screen = false }
+                              if pixels[left+1]>20 { black_screen = false }
+                              if pixels[left+2]>20 { black_screen = false }
                            }
                         }
+
+                        if !black_screen {
+                        for x in vnc_rect.left .. min(ATARI_WIDTH as u16, (vnc_rect.left+vnc_rect.width)) {
+                           for y in vnc_rect.top .. min(ATARI_HEIGHT as u16, (vnc_rect.top+vnc_rect.height)) {
+                              let i = x - vnc_rect.left;
+                              let j = y - vnc_rect.top;
+                              let left = 4*(j * vnc_rect.width + i) as usize;
+                              if pixels[left+3] > 0 {
+                                 screen.put_pixel(x as u32, y as u32, image::Rgb([ pixels[left+2], pixels[left+1], pixels[left] ]));
+                              }
+                           }
+                        }}
                      },
                      _ => {}
                   }
                }
 
-               /*
-
-
-               
-               //poll vnc connection for updates
-
-                     Event::Disconnected(_) => {
-                        println!("Disconnected Event")
-                     },
-                     Event::Resize(new_width, new_height) => {
-                        println!("Resize Event")
-                     },
-                     Event::CopyPixels { src: vnc_src, dst: vnc_dst } => {
-                        println!("CopyPixels Event")
-                     },
-                     Event::EndOfFrame => {
-                     },
-                     Event::Clipboard(ref text) => {
-                       println!("Clipboard Event")
-                     },
-                     Event::SetCursor {
-                        size:    (width, height),
-                        hotspot: (new_hotspot_x, new_hotspot_y),
-                        pixels,
-                        mask_bits
-                     } => {
-                        println!("received SetCursor Event");
-                     }
-                     _ => {
-                        println!("Received some other message from vnc");
-                     }
-                  }
-               }
-
                let ref mut fout = File::create(&Path::new( &format!("mov_out/frame_{}.png", frame_i)[..] )).unwrap();
                let _ = image::ImageRgb8(screen.clone()).save(fout, image::PNG);
-               */
+
             }
          }));
       }
@@ -396,7 +373,7 @@ impl Gym {
       }
 
       Command::new("ffmpeg")
-                 .arg("-r").arg( format!("{}", self.fps) )
+                 .arg("-r").arg("5")
                  .arg("-f").arg("image2")
                  .arg("-i").arg("mov_out/frame_%0d.png")
                  .arg("-r").arg("24")
