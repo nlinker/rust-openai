@@ -2,6 +2,8 @@
 name = "openai"
 version = "0.1.0"
 authors = ["Andrew <andrew@subarctic.org>"]
+description = "OpenAI client for Rust"
+license = "MIT"
 
 [dependencies]
 glob = "*"
