@@ -299,6 +299,14 @@ impl Gym {
                   Err(e) => {}
                }
             }
+            for entry in glob("*.mpg").expect("Failed to read glob pattern") {
+               match entry {
+                  Ok(path) => {
+                    fs::remove_file(path);
+                  }
+                  Err(e) => {}
+               }
+            }
             fs::create_dir("mov_out/");
 
             let mut frame_i = 0;
