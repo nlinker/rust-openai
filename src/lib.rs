@@ -1,5 +1,6 @@
 use std::process::Command;
 use std::{thread, time, str};
+use std::thread::{Thread}
 use std::time::{Duration, SystemTime};
 use std::cmp::{max, min};
 use std::fs;
@@ -91,6 +92,7 @@ struct RewarderCommand {
 const ATARI_HEIGHT: u32 = 262;
 const ATARI_WIDTH: u32 = 160;
 
+
 impl Gym {
    pub fn parse_args(&mut self) -> () {
       let mut prev = "".to_string();
@@ -129,9 +131,7 @@ impl Gym {
          record_dst: "video.mpg".to_string()
       }
    }
-   pub fn start<T: GymMember>(&mut self, agent: T) -> () {
-
-      for pi in 0..self.max_parallel {
+   pub fn prep_remote(&mut self) -> () {
          let base_vnc = 5900 + pi;
          let base_rec = 15900 + pi;
          let ecode = Command::new("docker")
@@ -141,7 +141,10 @@ impl Gym {
                  .arg("quay.io/openai/universe.gym-core:0.20.0")
                  .spawn();
          print!("spawned docker process at {} / {}", base_vnc, base_rec);
-      }
+
+      //let five_seconds = time::Duration::from_millis(5000);
+      //thread::sleep(five_seconds);
+
 
       for pi in 0..self.max_parallel {
          let mut ok = false;
@@ -165,20 +168,9 @@ impl Gym {
          if !ok { panic!("Unable to confirm connectivity to docker #{}", pi) }
          else { println!("Confirmed connectivity to docker #{}", pi); }
       }
-      let five_seconds = time::Duration::from_millis(5000);
-      thread::sleep(five_seconds);
 
-      let mut threads = Vec::new();
-      for pi in 0..self.max_parallel {
-
-         let self_env_id = format!("{: <99}", self.env_id).clone();
-         let self_fps = self.fps;
-         let self_duration = self.duration;
-         let self_record_dst = self.record_dst.clone();
-
-         threads.push(thread::spawn(move || {
-            let now = SystemTime::now();
-
+   }
+   pub fn remote_prep_rewarder(&mut self) -> () {
             let ws_url = &format!("ws://127.0.0.1:{}", 15900+pi)[..];
             let url = Url::parse(ws_url).unwrap();
             println!("Connecting to rewarder at {}", url);
@@ -200,11 +192,6 @@ impl Gym {
             // receiver.set_nonblocking(true);
             println!("Recorder websocket is now ready to use at {}", 15900+pi); 
 
-            //TODO
-            //connect to vnc and rewarder
-            //start playing
-            //start recording results to movie
-
             let reset_cmd = RewarderCommand{
                method: "v0.env.reset".to_owned(),
                body: RCBody {
@@ -222,7 +209,8 @@ impl Gym {
             println!("Send reset json message to rewarder: {}", reset_msg);
             let rst_msg = Message::text(String::from(reset_msg));
             sender.send_message(&rst_msg);
-
+   }
+   pub fn remote_prep_vnc() -> () {
             //connect vnc
             let vnc_addr: SocketAddr = format!("127.0.0.1:{}", 5900+pi).parse().expect("Unable to parse socket address");
             let stream = match std::net::TcpStream::connect(vnc_addr) {
@@ -255,9 +243,8 @@ impl Gym {
                }
             };
             println!("Connected to vnc on port: {}", 5900+pi);
-
-            //let ws have it's own thread because it doesn't play well with others
-            thread::spawn(move || {
+   }
+   pub fn sync_rewarder() -> () {
                for msg in receiver.incoming_messages() {
                   let msg: Result<websocket::message::Message,_> = msg;
                   match msg {
@@ -284,9 +271,8 @@ impl Gym {
                      }
                   }
                }
-            });
-
-
+   }
+   pub fn sync_vnc() -> () {
             let (mut width, mut height) = vnc.size();
             let (mut width, mut height) = (min(ATARI_WIDTH,width as u32), min(ATARI_HEIGHT,height as u32));
             let mut screen = image::ImageBuffer::new(width as u32, height as u32);
@@ -373,13 +359,23 @@ impl Gym {
 
             }
          }));
-      }
+   }
+   pub fn start_remote<T: GymMember>(&mut self) -> Thread {
+         let self_env_id = format!("{: <99}", self.env_id).clone();
+         let self_fps = self.fps;
+         let self_duration = self.duration;
+         let self_record_dst = self.record_dst.clone();
 
+         self.remote_prep_rewarder();
+         self.remote_prep_vnc();
 
-      for t in threads {
-         t.join();
-      }
-
+         loop {
+            self.sync_rewarder();
+            self.sync_vnc();
+            self.sync_agent();
+         }
+   }
+   pub fn cleanup(&mut self) -> () {
       Command::new("ffmpeg")
                  .arg("-r").arg("5")
                  .arg("-f").arg("image2")
@@ -388,8 +384,23 @@ impl Gym {
                  .arg("-pix_fmt").arg("yuv420p")
                  .arg(self.record_dst.clone())
                  .spawn();
+   }
+   pub fn start<T: GymMember>(&mut self, agent: T) -> () {
 
-      println!("All remotes terminated. Will now cleanup remote resources.");
+      for pi in 0..self.max_parallel {
+         self.prep_remote(pi);
+      }
+
+      let mut threads = Vec::new();
+      for pi in 0..self.max_parallel {
+         threads.push( self.start_remote(self, agent) )
+      }
+
+      for t in threads {
+         t.join();
+      }
+
+      self.post_cleanup()
    }
 }
 
