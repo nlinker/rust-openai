@@ -58,6 +58,10 @@ pub trait GymMember {
    fn close (&mut self) -> ();
 }
 pub struct GymRemote {
+   fps: u32,
+   env_id: String,
+   duration: u64,
+   record_dst: String
 }
 
 pub struct Gym {
@@ -134,24 +138,6 @@ impl GymRemote {
             let (mut width, mut height) = vnc.size();
             let (mut width, mut height) = (min(ATARI_WIDTH,width as u32), min(ATARI_HEIGHT,height as u32));
             let mut screen = image::ImageBuffer::new(width as u32, height as u32);
-
-            for entry in glob("mov_out/ *.png").expect("Failed to read glob pattern") {
-               match entry {
-                  Ok(path) => {
-                    fs::remove_file(path);
-                  }
-                  Err(e) => {}
-               }
-            }
-            for entry in glob("*.mpg").expect("Failed to read glob pattern") {
-               match entry {
-                  Ok(path) => {
-                    fs::remove_file(path);
-                  }
-                  Err(e) => {}
-               }
-            }
-            fs::create_dir("mov_out/");
 
             let mut frame_i = 0;
             loop {
@@ -299,7 +285,7 @@ impl Gym {
       }
       */
    }
-   pub fn remote_prep_rewarder(&mut self) -> () {
+   pub fn remote_prep_rewarder(&mut self, pi: u32) -> () {
       /*
             let ws_url = &format!("ws://127.0.0.1:{}", 15900+pi)[..];
             let url = Url::parse(ws_url).unwrap();
@@ -341,7 +327,7 @@ impl Gym {
             sender.send_message(&rst_msg);
       */
    }
-   pub fn remote_prep_vnc(&mut self) -> () {
+   pub fn remote_prep_vnc(&mut self, pi: u32) -> () {
       /*
             //connect vnc
             let vnc_addr: SocketAddr = format!("127.0.0.1:{}", 5900+pi).parse().expect("Unable to parse socket address");
@@ -379,15 +365,36 @@ impl Gym {
    }
    pub fn post_cleanup(&mut self) -> () {
    }
-   pub fn start_remote(&mut self) -> GymRemote {
-         let self_env_id = format!("{: <99}", self.env_id).clone();
-         let self_fps = self.fps;
-         let self_duration = self.duration;
-         let self_record_dst = self.record_dst.clone();
-
-         self.remote_prep_rewarder();
-         self.remote_prep_vnc();
-         return GymRemote {};
+   pub fn remote_prep_recorder(&mut self, pi: u32) {
+      for entry in glob("mov_out/*.png").expect("Failed to read glob pattern") {
+         match entry {
+            Ok(path) => {
+               fs::remove_file(path);
+            }
+            Err(e) => {}
+         }
+      }
+      for entry in glob("*.mpg").expect("Failed to read glob pattern") {
+         match entry {
+            Ok(path) => {
+               fs::remove_file(path);
+            }
+            Err(e) => {}
+         }
+      }
+      fs::create_dir("mov_out/");
+   }
+   pub fn start_remote(&mut self, pi: u32) -> GymRemote {
+      self.remote_prep_recorder(pi);
+      self.remote_prep_rewarder(pi);
+      self.remote_prep_vnc(pi);
+      let r = GymRemote {
+         fps: self.fps,
+         env_id: format!("{: <99}", self.env_id).clone(),
+         duration: self.duration,
+         record_dst: self.record_dst.clone()
+      };
+      return r;
    }
    pub fn cleanup(&mut self) -> () {
       Command::new("ffmpeg")
@@ -406,10 +413,10 @@ impl Gym {
       let mut threads = Vec::new();
       for pi in 0..self.max_parallel {
          let start_agent = start_agent.clone();
-         let mut remote = self.start_remote();
+         let mut remote = self.start_remote(pi);
          threads.push(std::thread::spawn(move || {
             let agent = start_agent();
-            loop {
+            for _ in 0..remote.duration {
                remote.sync();
             }
          }));
