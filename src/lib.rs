@@ -1,4 +1,4 @@
-use std::process::Command;
+use std::process::{Command,Stdio};
 use std::{thread, time, str};
 use std::time::{Duration, SystemTime};
 use std::cmp::{max, min};
@@ -7,7 +7,7 @@ use std::fs::File;
 use std::path::Path;
 use std::string::String;
 use std::io::prelude::*;
-use std::io::stdin;
+use std::io::stdout;
 use std::net::{TcpStream, SocketAddr};
 use std::sync::mpsc::channel;
 use std::env;
@@ -246,21 +246,16 @@ impl Gym {
          record_dst: "video.mpg".to_string()
       }
    }
-   pub fn prep_remote(&mut self, pi: u32) -> () {
-      /*
-         let base_vnc = 5900 + pi;
-         let base_rec = 15900 + pi;
-         let ecode = Command::new("docker")
-                 .arg("run")
-                 .arg("-p").arg( format!("5900:{}", base_vnc) )
-                 .arg("-p").arg( format!("15900:{}", base_rec) )
-                 .arg("quay.io/openai/universe.gym-core:0.20.0")
-                 .spawn();
-         print!("spawned docker process at {} / {}", base_vnc, base_rec);
-
-      //let five_seconds = time::Duration::from_millis(5000);
-      //thread::sleep(five_seconds);
-
+   pub fn remote_prep_container(&mut self, pi: u32) -> () {
+      let base_vnc = 5900 + pi;
+      let base_rec = 15900 + pi;
+      let ecode = Command::new("docker")
+         .arg("run")
+         .arg("-p").arg( format!("5900:{}", base_vnc) )
+         .arg("-p").arg( format!("15900:{}", base_rec) )
+         .arg("quay.io/openai/universe.gym-core:0.20.0")
+         .spawn();
+      print!("spawned docker process at {} / {}", base_vnc, base_rec);
 
       for pi in 0..self.max_parallel {
          let mut ok = false;
@@ -284,7 +279,6 @@ impl Gym {
          if !ok { panic!("Unable to confirm connectivity to docker #{}", pi) }
          else { println!("Confirmed connectivity to docker #{}", pi); }
       }
-      */
    }
    pub fn remote_prep_rewarder(&mut self, pi: u32) -> () {
       /*
@@ -384,6 +378,7 @@ impl Gym {
       fs::create_dir("mov_out/");
    }
    pub fn start_remote(&mut self, pi: u32) -> GymRemote {
+      self.remote_prep_container(pi);
       self.remote_prep_recorder(pi);
       self.remote_prep_rewarder(pi);
       self.remote_prep_vnc(pi);
@@ -405,11 +400,15 @@ impl Gym {
                  .arg(self.record_dst.clone())
                  .spawn();
    }
+   pub fn remote_sanitize(&mut self) -> () {
+      Command::new("sh").arg("-c").arg("docker kill $(docker ps -q)").spawn().expect("sh");
+   }
    pub fn start<F,T: GymMember>(&mut self, start_agent: F) -> ()
    where F: Fn() -> T + Send + Sync + 'static
    {
       let start_agent = Arc::new(start_agent);
       let mut threads = Vec::new();
+      self.remote_sanitize();
       for pi in 0..self.max_parallel {
          let start_agent = start_agent.clone();
          let mut remote = self.start_remote(pi);
