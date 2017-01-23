@@ -364,8 +364,6 @@ impl Gym {
             println!("Connected to vnc on port: {}", 5900+pi);
       */
    }
-   pub fn post_cleanup(&mut self) -> () {
-   }
    pub fn remote_prep_recorder(&mut self, pi: u32) {
       for entry in glob("mov_out/*.png").expect("Failed to read glob pattern") {
          match entry {
@@ -397,7 +395,7 @@ impl Gym {
       };
       return r;
    }
-   pub fn cleanup(&mut self) -> () {
+   pub fn post_cleanup(&mut self) -> () {
       Command::new("ffmpeg")
                  .arg("-r").arg("5")
                  .arg("-f").arg("image2")
