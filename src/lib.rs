@@ -52,9 +52,10 @@ pub struct GymState {
    screen: gym_point
 }
 pub trait GymMember {
-   fn start (&mut self, mut s: GymShape, mut t: GymState) -> ();
+   fn start (&mut self, s: GymShape, mut t: GymState) -> ();
    fn reward (&mut self, gym_reward, gym_done) -> ();
    fn reset (&mut self) -> ();
+   fn tick (&mut self) -> ();
    fn close (&mut self) -> ();
 }
 pub struct GymRemote {
