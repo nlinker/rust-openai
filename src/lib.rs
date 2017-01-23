@@ -1,6 +1,5 @@
 use std::process::Command;
 use std::{thread, time, str};
-use std::thread::{Thread}
 use std::time::{Duration, SystemTime};
 use std::cmp::{max, min};
 use std::fs;
@@ -13,6 +12,8 @@ use std::net::{TcpStream, SocketAddr};
 use std::sync::mpsc::channel;
 use std::env;
 use std::iter::repeat;
+use std::sync::mpsc;
+use std::sync::Arc;
 
 extern crate glob;
 use glob::glob;
@@ -47,17 +48,16 @@ pub struct GymShape {
    reward_max: gym_reward,
    reward_min: gym_reward
 }
-pub struct GymEnv {
-   look : fn() -> gym_point,
-   cause : fn(a: gym_point) -> (),
-   reset : fn () -> (),
-   close : fn () -> ()
+pub struct GymState {
+   screen: gym_point
 }
 pub trait GymMember {
-   fn start (&mut self, GymShape) -> (&mut GymMember);
-   fn reward (&mut self, gym_reward,gym_done) -> ();
+   fn start (&mut self, mut s: GymShape, mut t: GymState) -> ();
+   fn reward (&mut self, gym_reward, gym_done) -> ();
    fn reset (&mut self) -> ();
    fn close (&mut self) -> ();
+}
+pub struct GymRemote {
 }
 
 pub struct Gym {
@@ -92,159 +92,15 @@ struct RewarderCommand {
 const ATARI_HEIGHT: u32 = 262;
 const ATARI_WIDTH: u32 = 160;
 
-
-impl Gym {
-   pub fn parse_args(&mut self) -> () {
-      let mut prev = "".to_string();
-      for argument in std::env::args() {
-         if prev == "--fps" {
-            self.fps = argument.parse::<u32>().unwrap();
-            prev = "".to_string();
-         } else if prev == "--game" {
-            self.env_id = argument;
-            prev = "".to_string();
-         } else if prev == "--parallel" {
-            self.max_parallel = argument.parse::<u32>().unwrap();
-            prev = "".to_string();
-         } else if prev == "--duration" {
-            self.duration = argument.parse::<u64>().unwrap();
-            prev = "".to_string();
-         } else if prev == "--record" {
-            self.record_dst = argument;
-            prev = "".to_string();
-         } else {
-            prev = argument;
-         }
-      }
+impl GymRemote {
+   pub fn sync(&mut self) -> () {
+      self.sync_rewarder();
+      self.sync_vnc();
    }
-   pub fn set_fps(&mut self, fps: u32) -> () { self.fps = fps }
-   pub fn set_game(&mut self, game: String) -> () { self.env_id = game.to_string() }
-   pub fn set_max_parallel(&mut self, par: u32) -> () { self.max_parallel = par }
-   pub fn set_duration(&mut self, num: u64) -> () { self.duration = num }
-   pub fn set_record(&mut self, dst: String) -> () { self.record_dst = dst.to_string() }
-   pub fn new() -> Gym {
-      Gym {
-         fps: 10,
-         env_id: "gym-core.AirRaid-v0".to_string(),
-         max_parallel: 1,
-         duration: 60,
-         record_dst: "video.mpg".to_string()
-      }
+   pub fn sync_agent(&mut self) -> () {
    }
-   pub fn prep_remote(&mut self) -> () {
-         let base_vnc = 5900 + pi;
-         let base_rec = 15900 + pi;
-         let ecode = Command::new("docker")
-                 .arg("run")
-                 .arg("-p").arg( format!("5900:{}", base_vnc) )
-                 .arg("-p").arg( format!("15900:{}", base_rec) )
-                 .arg("quay.io/openai/universe.gym-core:0.20.0")
-                 .spawn();
-         print!("spawned docker process at {} / {}", base_vnc, base_rec);
-
-      //let five_seconds = time::Duration::from_millis(5000);
-      //thread::sleep(five_seconds);
-
-
-      for pi in 0..self.max_parallel {
-         let mut ok = false;
-         for _ in 0..15 { //wait up to 15 seconds for dockers to boot
-            if !ok {
-               let rec_port = 15900 + pi;
-
-               println!("Polling docker at port {} for connectivity.", rec_port);
-               let one_second = time::Duration::from_millis(1000);
-               thread::sleep(one_second);
-
-               let ns1: SocketAddr = format!("127.0.0.1:{}", rec_port).parse().expect("Unable to parse socket address");
-               let mut s1 = TcpStream::connect(ns1);
-
-               match s1 {
-                  Ok(_) => { ok=true; }
-                  _ => { println!("No connectivity to {}", rec_port); }
-               }
-            }
-         }
-         if !ok { panic!("Unable to confirm connectivity to docker #{}", pi) }
-         else { println!("Confirmed connectivity to docker #{}", pi); }
-      }
-
-   }
-   pub fn remote_prep_rewarder(&mut self) -> () {
-            let ws_url = &format!("ws://127.0.0.1:{}", 15900+pi)[..];
-            let url = Url::parse(ws_url).unwrap();
-            println!("Connecting to rewarder at {}", url);
-            let mut request = Client::connect(url).unwrap();
-
-            let mut auth_header = self::hyper::header::Authorization(
-               self::hyper::header::Basic {
-                  username: "openai".to_owned(),
-                 password: Some("openai".to_owned())
-               }
-            );
-
-            request.headers.set(auth_header);
-            let mut response = request.send().unwrap(); // Send the request and retrieve a response
-            response.validate().unwrap(); // Validate the response
-            let (mut sender, mut receiver) = response.begin().split();
-
-            // websocket receiver nonblocking is bugged, so we'll just put it in it's own thread...
-            // receiver.set_nonblocking(true);
-            println!("Recorder websocket is now ready to use at {}", 15900+pi); 
-
-            let reset_cmd = RewarderCommand{
-               method: "v0.env.reset".to_owned(),
-               body: RCBody {
-                  seed: 1,
-                  env_id: self_env_id.trim().to_string(),
-                  fps: self_fps
-               },
-               headers: RCHeaders {
-                  sent_at: 0,
-                  episode_id: 0,
-                  message_id: 0
-               }
-            };
-            let reset_msg = json::encode(&reset_cmd).unwrap();
-            println!("Send reset json message to rewarder: {}", reset_msg);
-            let rst_msg = Message::text(String::from(reset_msg));
-            sender.send_message(&rst_msg);
-   }
-   pub fn remote_prep_vnc() -> () {
-            //connect vnc
-            let vnc_addr: SocketAddr = format!("127.0.0.1:{}", 5900+pi).parse().expect("Unable to parse socket address");
-            let stream = match std::net::TcpStream::connect(vnc_addr) {
-               Ok(stream) => stream,
-               Err(error) => {
-                  panic!("cannot connect to localhost:{}: {}", 5900+pi, error);
-                  std::process::exit(1)
-               }
-            };
-            let mut vnc = match vnc::Client::from_tcp_stream(stream, true, |methods| {
-               for method in methods {
-                  match method {
-                     &vnc::client::AuthMethod::Password => {
-                        let mut key = [0; 8];
-                        for (i, byte) in "openai".bytes().enumerate() {
-                           if i == 8 { break }
-                           key[i] = byte
-                        }
-                        return Some(vnc::client::AuthChoice::Password(key))
-                     }
-                     _ => ()
-                  }
-               }
-               None
-            }) {
-               Ok(vnc) => vnc,
-               Err(error) => {
-                  panic!("cannot initialize VNC session: {}", error);
-                  std::process::exit(1)
-               }
-            };
-            println!("Connected to vnc on port: {}", 5900+pi);
-   }
-   pub fn sync_rewarder() -> () {
+   pub fn sync_rewarder(&mut self) -> () {
+      /*
                for msg in receiver.incoming_messages() {
                   let msg: Result<websocket::message::Message,_> = msg;
                   match msg {
@@ -271,13 +127,15 @@ impl Gym {
                      }
                   }
                }
+      */
    }
-   pub fn sync_vnc() -> () {
+   pub fn sync_vnc(&mut self) -> () {
+      /*
             let (mut width, mut height) = vnc.size();
             let (mut width, mut height) = (min(ATARI_WIDTH,width as u32), min(ATARI_HEIGHT,height as u32));
             let mut screen = image::ImageBuffer::new(width as u32, height as u32);
 
-            for entry in glob("mov_out/*.png").expect("Failed to read glob pattern") {
+            for entry in glob("mov_out/ *.png").expect("Failed to read glob pattern") {
                match entry {
                   Ok(path) => {
                     fs::remove_file(path);
@@ -359,8 +217,169 @@ impl Gym {
 
             }
          }));
+      */
    }
-   pub fn start_remote<T: GymMember>(&mut self) -> Thread {
+}
+
+impl Gym {
+   pub fn parse_args(&mut self) -> () {
+      let mut prev = "".to_string();
+      for argument in std::env::args() {
+         if prev == "--fps" {
+            self.fps = argument.parse::<u32>().unwrap();
+            prev = "".to_string();
+         } else if prev == "--game" {
+            self.env_id = argument;
+            prev = "".to_string();
+         } else if prev == "--parallel" {
+            self.max_parallel = argument.parse::<u32>().unwrap();
+            prev = "".to_string();
+         } else if prev == "--duration" {
+            self.duration = argument.parse::<u64>().unwrap();
+            prev = "".to_string();
+         } else if prev == "--record" {
+            self.record_dst = argument;
+            prev = "".to_string();
+         } else {
+            prev = argument;
+         }
+      }
+   }
+   pub fn set_fps(&mut self, fps: u32) -> () { self.fps = fps }
+   pub fn set_game(&mut self, game: String) -> () { self.env_id = game.to_string() }
+   pub fn set_max_parallel(&mut self, par: u32) -> () { self.max_parallel = par }
+   pub fn set_duration(&mut self, num: u64) -> () { self.duration = num }
+   pub fn set_record(&mut self, dst: String) -> () { self.record_dst = dst.to_string() }
+   pub fn new() -> Gym {
+      Gym {
+         fps: 10,
+         env_id: "gym-core.AirRaid-v0".to_string(),
+         max_parallel: 1,
+         duration: 60,
+         record_dst: "video.mpg".to_string()
+      }
+   }
+   pub fn prep_remote(&mut self, pi: u32) -> () {
+      /*
+         let base_vnc = 5900 + pi;
+         let base_rec = 15900 + pi;
+         let ecode = Command::new("docker")
+                 .arg("run")
+                 .arg("-p").arg( format!("5900:{}", base_vnc) )
+                 .arg("-p").arg( format!("15900:{}", base_rec) )
+                 .arg("quay.io/openai/universe.gym-core:0.20.0")
+                 .spawn();
+         print!("spawned docker process at {} / {}", base_vnc, base_rec);
+
+      //let five_seconds = time::Duration::from_millis(5000);
+      //thread::sleep(five_seconds);
+
+
+      for pi in 0..self.max_parallel {
+         let mut ok = false;
+         for _ in 0..15 { //wait up to 15 seconds for dockers to boot
+            if !ok {
+               let rec_port = 15900 + pi;
+
+               println!("Polling docker at port {} for connectivity.", rec_port);
+               let one_second = time::Duration::from_millis(1000);
+               thread::sleep(one_second);
+
+               let ns1: SocketAddr = format!("127.0.0.1:{}", rec_port).parse().expect("Unable to parse socket address");
+               let mut s1 = TcpStream::connect(ns1);
+
+               match s1 {
+                  Ok(_) => { ok=true; }
+                  _ => { println!("No connectivity to {}", rec_port); }
+               }
+            }
+         }
+         if !ok { panic!("Unable to confirm connectivity to docker #{}", pi) }
+         else { println!("Confirmed connectivity to docker #{}", pi); }
+      }
+      */
+   }
+   pub fn remote_prep_rewarder(&mut self) -> () {
+      /*
+            let ws_url = &format!("ws://127.0.0.1:{}", 15900+pi)[..];
+            let url = Url::parse(ws_url).unwrap();
+            println!("Connecting to rewarder at {}", url);
+            let mut request = Client::connect(url).unwrap();
+
+            let mut auth_header = self::hyper::header::Authorization(
+               self::hyper::header::Basic {
+                  username: "openai".to_owned(),
+                 password: Some("openai".to_owned())
+               }
+            );
+
+            request.headers.set(auth_header);
+            let mut response = request.send().unwrap(); // Send the request and retrieve a response
+            response.validate().unwrap(); // Validate the response
+            let (mut sender, mut receiver) = response.begin().split();
+
+            // websocket receiver nonblocking is bugged, so we'll just put it in it's own thread...
+            // receiver.set_nonblocking(true);
+            println!("Recorder websocket is now ready to use at {}", 15900+pi); 
+
+            let reset_cmd = RewarderCommand{
+               method: "v0.env.reset".to_owned(),
+               body: RCBody {
+                  seed: 1,
+                  env_id: self_env_id.trim().to_string(),
+                  fps: self_fps
+               },
+               headers: RCHeaders {
+                  sent_at: 0,
+                  episode_id: 0,
+                  message_id: 0
+               }
+            };
+            let reset_msg = json::encode(&reset_cmd).unwrap();
+            println!("Send reset json message to rewarder: {}", reset_msg);
+            let rst_msg = Message::text(String::from(reset_msg));
+            sender.send_message(&rst_msg);
+      */
+   }
+   pub fn remote_prep_vnc(&mut self) -> () {
+      /*
+            //connect vnc
+            let vnc_addr: SocketAddr = format!("127.0.0.1:{}", 5900+pi).parse().expect("Unable to parse socket address");
+            let stream = match std::net::TcpStream::connect(vnc_addr) {
+               Ok(stream) => stream,
+               Err(error) => {
+                  panic!("cannot connect to localhost:{}: {}", 5900+pi, error);
+                  std::process::exit(1)
+               }
+            };
+            let mut vnc = match vnc::Client::from_tcp_stream(stream, true, |methods| {
+               for method in methods {
+                  match method {
+                     &vnc::client::AuthMethod::Password => {
+                        let mut key = [0; 8];
+                        for (i, byte) in "openai".bytes().enumerate() {
+                           if i == 8 { break }
+                           key[i] = byte
+                        }
+                        return Some(vnc::client::AuthChoice::Password(key))
+                     }
+                     _ => ()
+                  }
+               }
+               None
+            }) {
+               Ok(vnc) => vnc,
+               Err(error) => {
+                  panic!("cannot initialize VNC session: {}", error);
+                  std::process::exit(1)
+               }
+            };
+            println!("Connected to vnc on port: {}", 5900+pi);
+      */
+   }
+   pub fn post_cleanup(&mut self) -> () {
+   }
+   pub fn start_remote(&mut self) -> GymRemote {
          let self_env_id = format!("{: <99}", self.env_id).clone();
          let self_fps = self.fps;
          let self_duration = self.duration;
@@ -368,12 +387,7 @@ impl Gym {
 
          self.remote_prep_rewarder();
          self.remote_prep_vnc();
-
-         loop {
-            self.sync_rewarder();
-            self.sync_vnc();
-            self.sync_agent();
-         }
+         return GymRemote {};
    }
    pub fn cleanup(&mut self) -> () {
       Command::new("ffmpeg")
@@ -385,15 +399,20 @@ impl Gym {
                  .arg(self.record_dst.clone())
                  .spawn();
    }
-   pub fn start<T: GymMember>(&mut self, agent: T) -> () {
-
-      for pi in 0..self.max_parallel {
-         self.prep_remote(pi);
-      }
-
+   pub fn start<F,T: GymMember>(&mut self, start_agent: F) -> ()
+   where F: Fn() -> T + Send + Sync + 'static
+   {
+      let start_agent = Arc::new(start_agent);
       let mut threads = Vec::new();
       for pi in 0..self.max_parallel {
-         threads.push( self.start_remote(self, agent) )
+         let start_agent = start_agent.clone();
+         let mut remote = self.start_remote();
+         threads.push(std::thread::spawn(move || {
+            let agent = start_agent();
+            loop {
+               remote.sync();
+            }
+         }));
       }
 
       for t in threads {
