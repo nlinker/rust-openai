@@ -390,7 +390,7 @@ impl Gym {
       };
       return r;
    }
-   pub fn post_cleanup(&mut self) -> () {
+   pub fn recorder_cleanup(&mut self) -> () {
       Command::new("ffmpeg")
                  .arg("-r").arg("5")
                  .arg("-f").arg("image2")
@@ -424,7 +424,8 @@ impl Gym {
          t.join();
       }
 
-      self.post_cleanup()
+      self.recorder_cleanup()
+      self.remote_sanitize();
    }
 }
 
