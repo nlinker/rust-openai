@@ -63,7 +63,8 @@ pub struct GymRemote {
    fps: u32,
    env_id: String,
    duration: u64,
-   record_dst: String
+   record_dst: String,
+   vnc: Option<vnc::Client>
 }
 
 pub struct Gym {
@@ -101,7 +102,7 @@ const ATARI_WIDTH: u32 = 160;
 impl GymRemote {
    pub fn start<T: GymMember>(&mut self, agent: T) {
       //self.start_rewarder();
-      //self.start_vnc();
+      self.start_vnc();
 
       loop {
          self.sync();
@@ -148,40 +149,38 @@ impl GymRemote {
       sender.send_message(&rst_msg);
    }
    pub fn start_vnc(&mut self) {
-      /*
-            //connect vnc
-            let vnc_addr: SocketAddr = format!("127.0.0.1:{}", 5900+pi).parse().expect("Unable to parse socket address");
-            let stream = match std::net::TcpStream::connect(vnc_addr) {
-               Ok(stream) => stream,
-               Err(error) => {
-                  panic!("cannot connect to localhost:{}: {}", 5900+pi, error);
-                  std::process::exit(1)
-               }
-            };
-            let mut vnc = match vnc::Client::from_tcp_stream(stream, true, |methods| {
-               for method in methods {
-                  match method {
-                     &vnc::client::AuthMethod::Password => {
-                        let mut key = [0; 8];
-                        for (i, byte) in "openai".bytes().enumerate() {
-                           if i == 8 { break }
-                           key[i] = byte
-                        }
-                        return Some(vnc::client::AuthChoice::Password(key))
-                     }
-                     _ => ()
+      //connect vnc
+      let vnc_addr: SocketAddr = format!("127.0.0.1:{}", 5900+self.id).parse().expect("Unable to parse socket address");
+      let stream = match std::net::TcpStream::connect(vnc_addr) {
+         Ok(stream) => stream,
+         Err(error) => {
+            panic!("cannot connect to localhost:{}: {}", 5900+self.id, error);
+            std::process::exit(1)
+         }
+      };
+      self.vnc = Some(match vnc::Client::from_tcp_stream(stream, true, |methods| {
+         for method in methods {
+            match method {
+               &vnc::client::AuthMethod::Password => {
+                  let mut key = [0; 8];
+                  for (i, byte) in "openai".bytes().enumerate() {
+                     if i == 8 { break }
+                     key[i] = byte
                   }
+                  return Some(vnc::client::AuthChoice::Password(key))
                }
-               None
-            }) {
-               Ok(vnc) => vnc,
-               Err(error) => {
-                  panic!("cannot initialize VNC session: {}", error);
-                  std::process::exit(1)
-               }
-            };
-            println!("Connected to vnc on port: {}", 5900+pi);
-      */
+               _ => ()
+            }
+         }
+         None
+      }) {
+         Ok(vnc) => vnc,
+         Err(error) => {
+            panic!("cannot initialize VNC session: {}", error);
+            std::process::exit(1)
+         }
+      });
+      println!("Connected to vnc on port: {}", 5900+self.id);
    }
    pub fn sync(&mut self) -> () {
       self.sync_rewarder();
@@ -392,7 +391,8 @@ impl Gym {
          fps: self.fps,
          env_id: format!("{: <99}", self.env_id).clone(),
          duration: self.duration,
-         record_dst: self.record_dst.clone()
+         record_dst: self.record_dst.clone(),
+         vnc: None
       };
       return r;
    }
