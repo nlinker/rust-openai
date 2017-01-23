@@ -59,6 +59,7 @@ pub trait GymMember {
    fn close (&mut self) -> ();
 }
 pub struct GymRemote {
+   id: u32,
    fps: u32,
    env_id: String,
    duration: u64,
@@ -98,6 +99,86 @@ const ATARI_HEIGHT: u32 = 262;
 const ATARI_WIDTH: u32 = 160;
 
 impl GymRemote {
+   pub fn start<T: GymMember>(&mut self, agent: T) {
+      self.start_rewarder();
+      self.start_vnc();
+   }
+   pub fn start_rewarder(&mut self) {
+      let ws_url = &format!("ws://127.0.0.1:{}", 15900+self.id)[..];
+      let url = Url::parse(ws_url).unwrap();
+      println!("Connecting to rewarder at {}", url);
+      let mut request = Client::connect(url).unwrap();
+
+      let mut auth_header = self::hyper::header::Authorization(
+         self::hyper::header::Basic {
+            username: "openai".to_owned(),
+            password: Some("openai".to_owned())
+         }
+      );
+
+      request.headers.set(auth_header);
+      let mut response = request.send().unwrap(); // Send the request and retrieve a response
+      response.validate().unwrap(); // Validate the response
+      let (mut sender, mut receiver) = response.begin().split();
+
+      // websocket receiver nonblocking is bugged, so we'll just put it in it's own thread...
+      //receiver.set_nonblocking(true);
+      println!("Recorder websocket is now ready to use at {}", 15900+ self.id); 
+
+      let reset_cmd = RewarderCommand{
+         method: "v0.env.reset".to_owned(),
+         body: RCBody {
+            seed: 1,
+            env_id: self.env_id.trim().to_string(),
+            fps: self.fps
+         },
+         headers: RCHeaders {
+            sent_at: 0,
+            episode_id: 0,
+            message_id: 0
+         }
+      };
+      let reset_msg = json::encode(&reset_cmd).unwrap();
+      println!("Send reset json message to rewarder: {}", reset_msg);
+      let rst_msg = Message::text(String::from(reset_msg));
+      sender.send_message(&rst_msg);
+   }
+   pub fn start_vnc(&mut self) {
+      /*
+            //connect vnc
+            let vnc_addr: SocketAddr = format!("127.0.0.1:{}", 5900+pi).parse().expect("Unable to parse socket address");
+            let stream = match std::net::TcpStream::connect(vnc_addr) {
+               Ok(stream) => stream,
+               Err(error) => {
+                  panic!("cannot connect to localhost:{}: {}", 5900+pi, error);
+                  std::process::exit(1)
+               }
+            };
+            let mut vnc = match vnc::Client::from_tcp_stream(stream, true, |methods| {
+               for method in methods {
+                  match method {
+                     &vnc::client::AuthMethod::Password => {
+                        let mut key = [0; 8];
+                        for (i, byte) in "openai".bytes().enumerate() {
+                           if i == 8 { break }
+                           key[i] = byte
+                        }
+                        return Some(vnc::client::AuthChoice::Password(key))
+                     }
+                     _ => ()
+                  }
+               }
+               None
+            }) {
+               Ok(vnc) => vnc,
+               Err(error) => {
+                  panic!("cannot initialize VNC session: {}", error);
+                  std::process::exit(1)
+               }
+            };
+            println!("Connected to vnc on port: {}", 5900+pi);
+      */
+   }
    pub fn sync(&mut self) -> () {
       self.sync_rewarder();
       self.sync_vnc();
@@ -242,7 +323,7 @@ impl Gym {
          fps: 10,
          env_id: "gym-core.AirRaid-v0".to_string(),
          max_parallel: 1,
-         duration: 60,
+         duration: 3,
          record_dst: "video.mpg".to_string()
       }
    }
@@ -280,84 +361,6 @@ impl Gym {
          else { println!("Confirmed connectivity to docker #{}", pi); }
       }
    }
-   pub fn remote_prep_rewarder(&mut self, pi: u32) -> () {
-      /*
-            let ws_url = &format!("ws://127.0.0.1:{}", 15900+pi)[..];
-            let url = Url::parse(ws_url).unwrap();
-            println!("Connecting to rewarder at {}", url);
-            let mut request = Client::connect(url).unwrap();
-
-            let mut auth_header = self::hyper::header::Authorization(
-               self::hyper::header::Basic {
-                  username: "openai".to_owned(),
-                 password: Some("openai".to_owned())
-               }
-            );
-
-            request.headers.set(auth_header);
-            let mut response = request.send().unwrap(); // Send the request and retrieve a response
-            response.validate().unwrap(); // Validate the response
-            let (mut sender, mut receiver) = response.begin().split();
-
-            // websocket receiver nonblocking is bugged, so we'll just put it in it's own thread...
-            // receiver.set_nonblocking(true);
-            println!("Recorder websocket is now ready to use at {}", 15900+pi); 
-
-            let reset_cmd = RewarderCommand{
-               method: "v0.env.reset".to_owned(),
-               body: RCBody {
-                  seed: 1,
-                  env_id: self_env_id.trim().to_string(),
-                  fps: self_fps
-               },
-               headers: RCHeaders {
-                  sent_at: 0,
-                  episode_id: 0,
-                  message_id: 0
-               }
-            };
-            let reset_msg = json::encode(&reset_cmd).unwrap();
-            println!("Send reset json message to rewarder: {}", reset_msg);
-            let rst_msg = Message::text(String::from(reset_msg));
-            sender.send_message(&rst_msg);
-      */
-   }
-   pub fn remote_prep_vnc(&mut self, pi: u32) -> () {
-      /*
-            //connect vnc
-            let vnc_addr: SocketAddr = format!("127.0.0.1:{}", 5900+pi).parse().expect("Unable to parse socket address");
-            let stream = match std::net::TcpStream::connect(vnc_addr) {
-               Ok(stream) => stream,
-               Err(error) => {
-                  panic!("cannot connect to localhost:{}: {}", 5900+pi, error);
-                  std::process::exit(1)
-               }
-            };
-            let mut vnc = match vnc::Client::from_tcp_stream(stream, true, |methods| {
-               for method in methods {
-                  match method {
-                     &vnc::client::AuthMethod::Password => {
-                        let mut key = [0; 8];
-                        for (i, byte) in "openai".bytes().enumerate() {
-                           if i == 8 { break }
-                           key[i] = byte
-                        }
-                        return Some(vnc::client::AuthChoice::Password(key))
-                     }
-                     _ => ()
-                  }
-               }
-               None
-            }) {
-               Ok(vnc) => vnc,
-               Err(error) => {
-                  panic!("cannot initialize VNC session: {}", error);
-                  std::process::exit(1)
-               }
-            };
-            println!("Connected to vnc on port: {}", 5900+pi);
-      */
-   }
    pub fn remote_prep_recorder(&mut self, pi: u32) {
       for entry in glob("mov_out/*.png").expect("Failed to read glob pattern") {
          match entry {
@@ -380,9 +383,8 @@ impl Gym {
    pub fn start_remote(&mut self, pi: u32) -> GymRemote {
       self.remote_prep_container(pi);
       self.remote_prep_recorder(pi);
-      self.remote_prep_rewarder(pi);
-      self.remote_prep_vnc(pi);
       let r = GymRemote {
+         id: pi,
          fps: self.fps,
          env_id: format!("{: <99}", self.env_id).clone(),
          duration: self.duration,
@@ -414,6 +416,7 @@ impl Gym {
          let mut remote = self.start_remote(pi);
          threads.push(std::thread::spawn(move || {
             let agent = start_agent();
+            remote.start(agent);
             for _ in 0..remote.duration {
                remote.sync();
             }
@@ -424,7 +427,7 @@ impl Gym {
          t.join();
       }
 
-      self.recorder_cleanup()
+      self.recorder_cleanup();
       self.remote_sanitize();
    }
 }
