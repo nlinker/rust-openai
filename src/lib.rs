@@ -100,8 +100,12 @@ const ATARI_WIDTH: u32 = 160;
 
 impl GymRemote {
    pub fn start<T: GymMember>(&mut self, agent: T) {
-      self.start_rewarder();
-      self.start_vnc();
+      //self.start_rewarder();
+      //self.start_vnc();
+
+      loop {
+         self.sync();
+      }
    }
    pub fn start_rewarder(&mut self) {
       let ws_url = &format!("ws://127.0.0.1:{}", 15900+self.id)[..];
@@ -403,7 +407,7 @@ impl Gym {
                  .spawn();
    }
    pub fn remote_sanitize(&mut self) -> () {
-      Command::new("sh").arg("-c").arg("docker kill $(docker ps -q)").spawn().expect("sh");
+      Command::new("sh").arg("-c").arg("docker kill $(docker ps -q)").spawn();
    }
    pub fn start<F,T: GymMember>(&mut self, start_agent: F) -> ()
    where F: Fn() -> T + Send + Sync + 'static
@@ -417,9 +421,6 @@ impl Gym {
          threads.push(std::thread::spawn(move || {
             let agent = start_agent();
             remote.start(agent);
-            for _ in 0..remote.duration {
-               remote.sync();
-            }
          }));
       }
 
