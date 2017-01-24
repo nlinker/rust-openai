@@ -64,7 +64,9 @@ pub struct GymRemote {
    env_id: String,
    duration: u64,
    record_dst: String,
-   vnc: Option<vnc::Client>
+   vnc: Option<vnc::Client>,
+   state: GymState,
+   shape: GymShape
 }
 
 pub struct Gym {
@@ -103,10 +105,18 @@ impl GymRemote {
    pub fn start<T: GymMember>(&mut self, agent: T) {
       //self.start_rewarder();
       self.start_vnc();
+      self.start_agent(agent);
 
       loop {
          self.sync();
       }
+   }
+   pub fn start_agent<T: GymMember>(&mut self, agent: T) {
+      /*          
+      make Gym Shape
+      make Gym State
+      agent.start(shape, state)
+      */
    }
    pub fn start_rewarder(&mut self) {
       let ws_url = &format!("ws://127.0.0.1:{}", 15900+self.id)[..];
@@ -220,9 +230,9 @@ impl GymRemote {
    }
    pub fn sync_vnc(&mut self) -> () {
       /*
-            let (mut width, mut height) = vnc.size();
-            let (mut width, mut height) = (min(ATARI_WIDTH,width as u32), min(ATARI_HEIGHT,height as u32));
-            let mut screen = image::ImageBuffer::new(width as u32, height as u32);
+      //let (mut width, mut height) = vnc.size();
+      let (mut width, mut height) = (min(ATARI_WIDTH,width as u32), min(ATARI_HEIGHT,height as u32));
+      let mut screen = image::ImageBuffer::new(width as u32, height as u32);
 
             let mut frame_i = 0;
             loop {
@@ -392,7 +402,16 @@ impl Gym {
          env_id: format!("{: <99}", self.env_id).clone(),
          duration: self.duration,
          record_dst: self.record_dst.clone(),
-         vnc: None
+         vnc: None,
+         state: GymState {
+            screen: Vec::new()
+         },
+         shape: GymShape {
+            action_space: Vec::new(),
+            observation_space: Vec::new(),
+            reward_max: 0.0,
+            reward_min: 0.0
+         }
       };
       return r;
    }
