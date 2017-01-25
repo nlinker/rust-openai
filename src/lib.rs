@@ -110,7 +110,7 @@ impl GymRemote {
       self.start_vnc();
       self.start_agent(agent);
 
-      loop {
+      for _ in 0..self.duration {
          self.sync();
       }
    }
