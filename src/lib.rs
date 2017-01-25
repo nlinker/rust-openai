@@ -67,7 +67,9 @@ pub struct GymRemote {
    record_dst: String,
    vnc: Option<vnc::Client>,
    state: GymState,
-   shape: GymShape
+   shape: GymShape,
+   time: SystemTime,
+   frame: u32
 }
 
 pub struct Gym {
@@ -118,7 +120,8 @@ impl GymRemote {
       self.sync_agent();
    }
    pub fn start_agent<T: GymMember>(&mut self, mut agent: T) {
-      agent.start(&self.shape, &self.state)
+      agent.start(&self.shape, &self.state);
+      self.time = SystemTime::now();
    }
    pub fn start_rewarder(&mut self) {
       let ws_url = &format!("ws://127.0.0.1:{}", 15900+self.id)[..];
@@ -227,14 +230,18 @@ impl GymRemote {
       */
    }
    pub fn sync_vnc(&mut self) -> () {
-      /*
-      //let (mut width, mut height) = vnc.size();
-      let (mut width, mut height) = (min(ATARI_WIDTH,width as u32), min(ATARI_HEIGHT,height as u32));
-      let mut screen = image::ImageBuffer::new(width as u32, height as u32);
+      let width = self.shape.observation_space[0];
+      let height = self.shape.observation_space[1];
+      let elapsed = self.time.elapsed().unwrap();
+      let framed = self.frame;
+      let ms = elapsed.as_secs()*1000 + ((elapsed.subsec_nanos()/1000) as u64);
 
-            let mut frame_i = 0;
+      if ms < 10 {
+         std::thread::sleep_ms((10 - ms) as u32);
+      }
+
+      /*
             loop {
-               std::thread::sleep_ms(10);
 
                match now.elapsed() {
                   Ok(elapsed) => {
@@ -409,7 +416,9 @@ impl Gym {
             observation_space: vec![ATARI_WIDTH as usize, ATARI_HEIGHT as usize, 3 as usize],
             reward_max : f64::INFINITY,
             reward_min : f64::NEG_INFINITY
-         }
+         },
+         time: SystemTime::now(),
+         frame: 0
       };
       return r;
    }
