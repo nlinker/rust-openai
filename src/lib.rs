@@ -42,7 +42,6 @@ use std::collections::HashMap;
 pub type gym_reward = f64;
 pub type gym_done = bool;
 pub type gym_range = Vec<usize>;
-pub type gym_point = Vec<u64>;
 pub struct GymShape {
    action_space: gym_range,
    observation_space: gym_range,
@@ -50,7 +49,7 @@ pub struct GymShape {
    reward_min: gym_reward
 }
 pub struct GymState {
-   screen: gym_point
+   screen: Vec<u8>
 }
 pub trait GymMember {
    fn start (&mut self, s: &GymShape, t: &GymState) -> ();
@@ -230,7 +229,22 @@ impl GymRemote {
       */
    }
    pub fn render_frame(&mut self) {
-      //write screen to png file
+      let width = self.shape.observation_space[0];
+      let height = self.shape.observation_space[1];
+
+      let mut imgbuf = image::ImageBuffer::new( width as u32, height as u32 );
+
+      for x in 0 .. width {
+         for y in 0 .. height {
+            let left = 3*(y * width + x) as usize;
+            let pixels = &self.state.screen;
+            imgbuf.put_pixel(x as u32, y as u32, image::Rgb([ pixels[left+2], pixels[left+1], pixels[left] ]));
+         }
+      }
+     
+      let ref mut fout = File::create(&Path::new( &format!("mov_out/frame_{}.png", self.frame)[..] )).unwrap();
+      let _ = image::ImageRgb8(imgbuf).save(fout, image::PNG);
+
       self.frame = self.frame + 1;
    }
    pub fn sync_vnc(&mut self) -> () {
@@ -292,24 +306,11 @@ impl GymRemote {
                            }
                         }
 
-                        if !black_screen {
-                        for x in vnc_rect.left .. min(ATARI_WIDTH as u16, (vnc_rect.left+vnc_rect.width)) {
-                           for y in vnc_rect.top .. min(ATARI_HEIGHT as u16, (vnc_rect.top+vnc_rect.height)) {
-                              let i = x - vnc_rect.left;
-                              let j = y - vnc_rect.top;
-                              let left = 4*(j * vnc_rect.width + i) as usize;
-                              if pixels[left+3] > 0 {
-                                 screen.put_pixel(x as u32, y as u32, image::Rgb([ pixels[left+2], pixels[left+1], pixels[left] ]));
-                              }
-                           }
-                        }}
                      },
                      _ => {}
                   }
                }
 
-               let ref mut fout = File::create(&Path::new( &format!("mov_out/frame_{}.png", frame_i)[..] )).unwrap();
-               let _ = image::ImageRgb8(screen.clone()).save(fout, image::PNG);
 
             }
          }));
@@ -351,7 +352,7 @@ impl Gym {
          fps: 10,
          env_id: "gym-core.AirRaid-v0".to_string(),
          max_parallel: 1,
-         duration: 3,
+         duration: 1800,
          record_dst: "video.mpg".to_string()
       }
    }

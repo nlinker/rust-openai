@@ -3,7 +3,7 @@ use openai::*;
 
 struct NullGymMember;
 impl GymMember for NullGymMember {
-   fn start (&mut self, s: GymShape, mut t: GymState) {}
+   fn start (&mut self, s: &GymShape, mut t: &GymState) {}
    fn reward(&mut self, r: gym_reward, d: gym_done) {}
    fn tick(&mut self) {}
    fn reset(&mut self) {}
