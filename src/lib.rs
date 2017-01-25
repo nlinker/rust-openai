@@ -253,7 +253,7 @@ impl GymRemote {
 
       let pause = 1000 / self.fps;
       std::thread::sleep_ms(pause);
-      self.render_frame()
+      self.render_frame();
 
       let mut vnc = self.vnc.as_mut().unwrap();
 
