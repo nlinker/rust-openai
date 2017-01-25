@@ -53,7 +53,7 @@ pub struct GymState {
    screen: gym_point
 }
 pub trait GymMember {
-   fn start (&mut self, s: GymShape, mut t: GymState) -> ();
+   fn start (&mut self, s: &GymShape, t: &GymState) -> ();
    fn reward (&mut self, gym_reward, gym_done) -> ();
    fn reset (&mut self) -> ();
    fn tick (&mut self) -> ();
@@ -103,7 +103,7 @@ const ATARI_HEIGHT: u32 = 262;
 const ATARI_WIDTH: u32 = 160;
 
 impl GymRemote {
-   pub fn start<T: GymMember>(&mut self, agent: T) {
+   pub fn start<T: GymMember>(&mut self, mut agent: T) {
       //self.start_rewarder();
       self.start_vnc();
       self.start_agent(agent);
@@ -112,12 +112,13 @@ impl GymRemote {
          self.sync();
       }
    }
-   pub fn start_agent<T: GymMember>(&mut self, agent: T) {
-      /*          
-      make Gym Shape
-      make Gym State
-      agent.start(shape, state)
-      */
+   pub fn sync(&mut self) -> () {
+      self.sync_rewarder();
+      self.sync_vnc();
+      self.sync_agent();
+   }
+   pub fn start_agent<T: GymMember>(&mut self, mut agent: T) {
+      agent.start(&self.shape, &self.state)
    }
    pub fn start_rewarder(&mut self) {
       let ws_url = &format!("ws://127.0.0.1:{}", 15900+self.id)[..];
@@ -192,10 +193,6 @@ impl GymRemote {
          }
       });
       println!("Connected to vnc on port: {}", 5900+self.id);
-   }
-   pub fn sync(&mut self) -> () {
-      self.sync_rewarder();
-      self.sync_vnc();
    }
    pub fn sync_agent(&mut self) -> () {
    }
