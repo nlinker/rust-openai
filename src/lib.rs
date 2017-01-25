@@ -104,6 +104,17 @@ const ATARI_HEIGHT: u32 = 262;
 const ATARI_WIDTH: u32 = 160;
 
 impl GymRemote {
+   pub fn recorder_cleanup(&mut self) -> () {
+      let real_fps = self.frame / max(self.time.elapsed().as_secs() as u32, 1);
+      Command::new("ffmpeg")
+                 .arg("-r").arg(format!("{}", real_fps))
+                 .arg("-f").arg("image2")
+                 .arg("-i").arg("mov_out/frame_%0d.png")
+                 .arg("-r").arg("24")
+                 .arg("-pix_fmt").arg("yuv420p")
+                 .arg(self.record_dst.clone())
+                 .spawn();
+   }
    pub fn start<T: GymMember>(&mut self, mut agent: T) {
       self.start_rewarder();
       self.start_vnc();
@@ -113,6 +124,7 @@ impl GymRemote {
          if self.time.elapsed().as_secs() > self.duration { break; }
          self.sync();
       }
+      self.recorder_cleanup();
    }
    pub fn sync(&mut self) -> () {
       self.sync_rewarder();
@@ -415,16 +427,6 @@ impl Gym {
       };
       return r;
    }
-   pub fn recorder_cleanup(&mut self) -> () {
-      Command::new("ffmpeg")
-                 .arg("-r").arg("5")
-                 .arg("-f").arg("image2")
-                 .arg("-i").arg("mov_out/frame_%0d.png")
-                 .arg("-r").arg("24")
-                 .arg("-pix_fmt").arg("yuv420p")
-                 .arg(self.record_dst.clone())
-                 .spawn();
-   }
    pub fn remote_sanitize(&mut self) -> () {
       Command::new("sh").arg("-c").arg("docker kill $(docker ps -q)").spawn();
    }
@@ -447,7 +449,6 @@ impl Gym {
          t.join();
       }
 
-      self.recorder_cleanup();
       self.remote_sanitize();
    }
 }
