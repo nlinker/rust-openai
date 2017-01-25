@@ -1,6 +1,6 @@
 use std::process::{Command,Stdio};
 use std::{thread, time, str};
-use std::time::{Duration, SystemTime};
+use std::time::{Duration, Instant};
 use std::cmp::{max, min};
 use std::fs;
 use std::fs::File;
@@ -67,7 +67,7 @@ pub struct GymRemote {
    vnc: Option<vnc::Client>,
    state: GymState,
    shape: GymShape,
-   time: SystemTime,
+   time: Instant,
    frame: u32
 }
 
@@ -120,7 +120,7 @@ impl GymRemote {
    }
    pub fn start_agent<T: GymMember>(&mut self, mut agent: T) {
       agent.start(&self.shape, &self.state);
-      self.time = SystemTime::now();
+      self.time = Instant::now();
    }
    pub fn start_rewarder(&mut self) {
       let ws_url = &format!("ws://127.0.0.1:{}", 15900+self.id)[..];
@@ -250,17 +250,11 @@ impl GymRemote {
    pub fn sync_vnc(&mut self) -> () {
       let width = self.shape.observation_space[0];
       let height = self.shape.observation_space[1];
-      let elapsed = self.time.elapsed().unwrap();
-      let framed = self.frame;
-      let ms = (elapsed.as_secs()*1000 + ((elapsed.subsec_nanos()/1000) as u64)) as u32;
-      let pause = 1000 / self.fps;
 
-      if ms < pause {
-         std::thread::sleep_ms(pause - ms);
-      }
-      for fi in 0..((ms * self.fps) / 1000) {
-         self.render_frame()
-      }
+      let pause = 1000 / self.fps;
+      std::thread::sleep_ms(pause);
+      self.render_frame()
+
       let mut vnc = self.vnc.as_mut().unwrap();
 
       vnc.request_update(vnc::Rect { left: 0, top: 0, width: width as u16, height: height as u16}, false).unwrap();
@@ -371,6 +365,10 @@ impl Gym {
          if !ok { panic!("Unable to confirm connectivity to docker #{}", pi) }
          else { println!("Confirmed connectivity to docker #{}", pi); }
       }
+
+      let ten_seconds = time::Duration::from_millis(10000);
+      thread::sleep(ten_seconds);
+
    }
    pub fn remote_prep_recorder(&mut self, pi: u32) {
       for entry in glob("mov_out/*.png").expect("Failed to read glob pattern") {
@@ -410,7 +408,7 @@ impl Gym {
             reward_max : f64::INFINITY,
             reward_min : f64::NEG_INFINITY
          },
-         time: SystemTime::now(),
+         time: Instant::now(),
          frame: 0
       };
       return r;
