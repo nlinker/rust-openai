@@ -263,7 +263,6 @@ impl GymRemote {
          match event {
             Event::PutPixels(vnc_rect, ref pixels) => {
                let mut black_screen = true;
-               /*
                for x in vnc_rect.left .. min(width as u16, (vnc_rect.left+vnc_rect.width)) {
                   for y in vnc_rect.top .. min(height as u16, (vnc_rect.top+vnc_rect.height)) {
                      let i = x - vnc_rect.left;
@@ -281,12 +280,14 @@ impl GymRemote {
                      let i = x - vnc_rect.left;
                      let j = y - vnc_rect.top;
                      let left = 4*(j * vnc_rect.width + i) as usize;
+                     let x = x as usize;
+                     let y = y as usize;
                      self.state.screen[3*(y*width + x)] = pixels[left+2];
                      self.state.screen[3*(y*width + x)+1] = pixels[left+1];
                      self.state.screen[3*(y*width + x)+2] = pixels[left];
                   }
                }}
-               */
+
             },
             _ => {}
          }
