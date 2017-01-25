@@ -229,16 +229,26 @@ impl GymRemote {
                }
       */
    }
+   pub fn render_frame(&mut self) {
+      //write screen to png file
+      self.frame = self.frame + 1;
+   }
    pub fn sync_vnc(&mut self) -> () {
       let width = self.shape.observation_space[0];
       let height = self.shape.observation_space[1];
       let elapsed = self.time.elapsed().unwrap();
       let framed = self.frame;
-      let ms = elapsed.as_secs()*1000 + ((elapsed.subsec_nanos()/1000) as u64);
+      let ms = (elapsed.as_secs()*1000 + ((elapsed.subsec_nanos()/1000) as u64)) as u32;
+      let pause = 1000 / self.fps;
 
-      if ms < 10 {
-         std::thread::sleep_ms((10 - ms) as u32);
+      if ms < pause {
+         std::thread::sleep_ms(pause - ms);
       }
+      for fi in 0..((ms * self.fps) / 1000) {
+         self.render_frame()
+      }
+
+      //TODO, update 
 
       /*
             loop {
