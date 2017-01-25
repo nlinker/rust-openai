@@ -109,7 +109,8 @@ impl GymRemote {
       self.start_vnc();
       self.start_agent(agent);
 
-      for _ in 0..self.duration {
+      loop {
+         if self.time.elapsed().as_secs() > self.duration { break; }
          self.sync();
       }
    }
@@ -329,7 +330,7 @@ impl Gym {
          fps: 10,
          env_id: "gym-core.AirRaid-v0".to_string(),
          max_parallel: 1,
-         duration: 1800,
+         duration: 180,
          record_dst: "video.mpg".to_string()
       }
    }
