@@ -14,6 +14,7 @@ use std::env;
 use std::iter::repeat;
 use std::sync::mpsc;
 use std::sync::Arc;
+use std::f64;
 
 extern crate glob;
 use glob::glob;
@@ -404,13 +405,13 @@ impl Gym {
          record_dst: self.record_dst.clone(),
          vnc: None,
          state: GymState {
-            screen: Vec::new()
+            screen: vec![0; (ATARI_WIDTH * ATARI_HEIGHT * 3) as usize]
          },
          shape: GymShape {
-            action_space: Vec::new(),
-            observation_space: Vec::new(),
-            reward_max: 0.0,
-            reward_min: 0.0
+            action_space: vec![10],
+            observation_space: vec![ATARI_WIDTH as usize, ATARI_HEIGHT as usize, 3 as usize],
+            reward_max : f64::INFINITY,
+            reward_min : f64::NEG_INFINITY
          }
       };
       return r;
