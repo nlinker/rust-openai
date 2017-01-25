@@ -105,7 +105,7 @@ const ATARI_WIDTH: u32 = 160;
 
 impl GymRemote {
    pub fn start<T: GymMember>(&mut self, mut agent: T) {
-      //self.start_rewarder();
+      self.start_rewarder();
       self.start_vnc();
       self.start_agent(agent);
 
@@ -238,7 +238,7 @@ impl GymRemote {
          for y in 0 .. height {
             let left = 3*(y * width + x) as usize;
             let pixels = &self.state.screen;
-            imgbuf.put_pixel(x as u32, y as u32, image::Rgb([ pixels[left+2], pixels[left+1], pixels[left] ]));
+            imgbuf.put_pixel(x as u32, y as u32, image::Rgb([ pixels[left], pixels[left+1], pixels[left+2] ]));
          }
       }
      
@@ -261,60 +261,42 @@ impl GymRemote {
       for fi in 0..((ms * self.fps) / 1000) {
          self.render_frame()
       }
+      let mut vnc = self.vnc.as_mut().unwrap();
 
-      //TODO, update 
-
-      /*
-            loop {
-
-               match now.elapsed() {
-                  Ok(elapsed) => {
-                     if elapsed.as_secs() > self_duration { return; }
-                  }
-                  Err(e) => {
-                  }
-               }
-
-               frame_i = frame_i + 1;
-               println!("frame {}", frame_i);
-
-               use x11::keysym::*;
-               vnc.request_update(vnc::Rect { left: 0, top: 0, width: width as u16, height: height as u16}, false).unwrap();
-
-               //replace with proxy to agent
-               if rand::random() {
-                  vnc.send_key_event(false, XK_Right).unwrap();
-                  vnc.send_key_event(true, XK_Left).unwrap();
-               } else { 
-                  vnc.send_key_event(false, XK_Left).unwrap();
-                  vnc.send_key_event(true, XK_Right).unwrap();
-               }
-
-               for event in vnc.poll_iter() {
-                  use vnc::client::Event;
-                  match event {
-                     Event::PutPixels(vnc_rect, ref pixels) => {
-                        let mut black_screen = true;
-                        for x in vnc_rect.left .. min(ATARI_WIDTH as u16, (vnc_rect.left+vnc_rect.width)) {
-                           for y in vnc_rect.top .. min(ATARI_HEIGHT as u16, (vnc_rect.top+vnc_rect.height)) {
-                              let i = x - vnc_rect.left;
-                              let j = y - vnc_rect.top;
-                              let left = 4*(j * vnc_rect.width + i) as usize;
-                              if pixels[left]>20 { black_screen = false }
-                              if pixels[left+1]>20 { black_screen = false }
-                              if pixels[left+2]>20 { black_screen = false }
-                           }
-                        }
-
-                     },
-                     _ => {}
+      vnc.request_update(vnc::Rect { left: 0, top: 0, width: width as u16, height: height as u16}, false).unwrap();
+      for event in vnc.poll_iter() {
+         use vnc::client::Event;
+         match event {
+            Event::PutPixels(vnc_rect, ref pixels) => {
+               let mut black_screen = true;
+               /*
+               for x in vnc_rect.left .. min(width as u16, (vnc_rect.left+vnc_rect.width)) {
+                  for y in vnc_rect.top .. min(height as u16, (vnc_rect.top+vnc_rect.height)) {
+                     let i = x - vnc_rect.left;
+                     let j = y - vnc_rect.top;
+                     let left = 4*(j * vnc_rect.width + i) as usize;
+                     if pixels[left]>20 { black_screen = false }
+                     if pixels[left+1]>20 { black_screen = false }
+                     if pixels[left+2]>20 { black_screen = false }
                   }
                }
 
-
-            }
-         }));
-      */
+               if !black_screen {
+               for x in vnc_rect.left .. min(width as u16, (vnc_rect.left+vnc_rect.width)) {
+                  for y in vnc_rect.top .. min(height as u16, (vnc_rect.top+vnc_rect.height)) {
+                     let i = x - vnc_rect.left;
+                     let j = y - vnc_rect.top;
+                     let left = 4*(j * vnc_rect.width + i) as usize;
+                     self.state.screen[3*(y*width + x)] = pixels[left+2];
+                     self.state.screen[3*(y*width + x)+1] = pixels[left+1];
+                     self.state.screen[3*(y*width + x)+2] = pixels[left];
+                  }
+               }}
+               */
+            },
+            _ => {}
+         }
+      }
    }
 }
 
