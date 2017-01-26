@@ -5,7 +5,7 @@ struct NullGymMember;
 impl GymMember for NullGymMember {
    fn start (&mut self, s: &GymShape, mut t: &GymState) {}
    fn reward(&mut self, r: gym_reward, d: gym_done) {}
-   fn tick(&mut self) {}
+   fn tick(&mut self) -> u64 { return 0 }
    fn reset(&mut self) {}
    fn close(&mut self) {}
 }

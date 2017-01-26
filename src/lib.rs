@@ -55,7 +55,7 @@ pub trait GymMember {
    fn start (&mut self, s: &GymShape, t: &GymState) -> ();
    fn reward (&mut self, gym_reward, gym_done) -> ();
    fn reset (&mut self) -> ();
-   fn tick (&mut self) -> ();
+   fn tick (&mut self) -> u64;
    fn close (&mut self) -> ();
 }
 pub struct GymRemote {
@@ -64,6 +64,7 @@ pub struct GymRemote {
    env_id: String,
    duration: u64,
    record_dst: String,
+   mode: String,
    vnc: Option<vnc::Client>,
    rewarder: Option<((self::websocket::client::Sender<websocket::WebSocketStream>, self::websocket::client::Receiver<websocket::WebSocketStream>))>,
    state: GymState,
@@ -119,13 +120,35 @@ impl GymRemote {
    pub fn start<T: GymMember>(&mut self, mut agent: T) {
       self.start_rewarder();
       self.start_vnc();
-      let agent = self.start_agent(agent);
+      let mut agent = self.start_agent(agent);
 
       loop {
+         use x11::keysym::*;
          if self.time.elapsed().as_secs() > self.duration { break; }
          self.sync();
+         let mut vnc = self.vnc.as_mut().unwrap();
 
-         //TODO sync agent
+         //TODO sync agent moves
+         let action = agent.tick();
+         if self.mode=="atari" {
+            if action==0 {
+               vnc.send_key_event(false, XK_Left).unwrap();
+               vnc.send_key_event(false, XK_Right).unwrap();
+               vnc.send_key_event(false, XK_Up).unwrap();
+               vnc.send_key_event(false, XK_Down).unwrap();
+               vnc.send_key_event(false, XK_space).unwrap();
+            } else if action==1 {
+               vnc.send_key_event(true, XK_Left).unwrap();
+            } else if action==2 {
+               vnc.send_key_event(true, XK_Right).unwrap();
+            } else if action==3 {
+               vnc.send_key_event(true, XK_Up).unwrap();
+            } else if action==4 {
+               vnc.send_key_event(true, XK_Down).unwrap();
+            } else if action==5 {
+               vnc.send_key_event(true, XK_space).unwrap();
+            }
+         }
       }
       self.recorder_cleanup();
    }
@@ -425,13 +448,14 @@ impl Gym {
          env_id: format!("{: <99}", self.env_id).clone(),
          duration: self.duration,
          record_dst: self.record_dst.clone(),
+         mode: "atari".to_string(),
          vnc: None,
          rewarder: None,
          state: GymState {
             screen: vec![0; (ATARI_WIDTH * ATARI_HEIGHT * 3) as usize]
          },
          shape: GymShape {
-            action_space: vec![10],
+            action_space: vec![6],
             observation_space: vec![ATARI_WIDTH as usize, ATARI_HEIGHT as usize, 3 as usize],
             reward_max : f64::INFINITY,
             reward_min : f64::NEG_INFINITY
