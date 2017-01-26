@@ -31,10 +31,10 @@ extern crate hyper;
 use self::hyper::header::{Headers, Authorization, Basic};
 
 extern crate websocket;
-use self::websocket::{Message, Sender, Receiver};
+use self::websocket::{Message, Sender, Receiver, Client};
 use self::websocket::client::request::Url;
+use self::websocket::client;
 use self::websocket::client::Request;
-use self::websocket::Client;
 use self::websocket::header::extensions::Extension;
 
 use std::collections::HashMap;
@@ -65,6 +65,7 @@ pub struct GymRemote {
    duration: u64,
    record_dst: String,
    vnc: Option<vnc::Client>,
+   rewarder: Option<((self::websocket::client::Sender<websocket::WebSocketStream>, self::websocket::client::Receiver<websocket::WebSocketStream>))>,
    state: GymState,
    shape: GymShape,
    time: Instant,
@@ -174,6 +175,8 @@ impl GymRemote {
       println!("Send reset json message to rewarder: {}", reset_msg);
       let rst_msg = Message::text(String::from(reset_msg));
       sender.send_message(&rst_msg);
+
+      self.rewarder = Some((sender,receiver));
    }
    pub fn start_vnc(&mut self) {
       //connect vnc
@@ -212,34 +215,37 @@ impl GymRemote {
    pub fn sync_agent(&mut self) -> () {
    }
    pub fn sync_rewarder(&mut self) -> () {
-      /*
-               for msg in receiver.incoming_messages() {
-                  let msg: Result<websocket::message::Message,_> = msg;
-                  match msg {
-                     Ok(message) => {
-                        match message.opcode {
-                           websocket::message::Type::Close => {
-                              //agent.close()
-                              println!("Connection to rewarder terminated.");
-                           },
-                           websocket::message::Type::Ping => { 
-                              let mut pong_message = Message::pong(message.payload);
-                              sender.send_message(&pong_message);
-                           },
-                           websocket::message::Type::Text => {
-                             let bytes = message.payload.into_owned();
-                             let msg = String::from_utf8(bytes).unwrap();
-                             println!("Received message from rewarder: {}", msg);
-                           },
-                           _ => {}
-                        }
-                     }
-                     Err(e) => {
-                        //if no frames available, IOError occurs
-                     }
-                  }
+      //TODO
+      let mut sr = self.rewarder.as_mut().unwrap();
+      let &mut (ref mut sender, ref mut receiver) = sr;
+
+      for msg in receiver.incoming_messages() {
+         let msg: Result<websocket::message::Message,_> = msg;
+         match msg {
+            Ok(message) => {
+               match message.opcode {
+                  websocket::message::Type::Close => {
+                     //agent.close()
+                     println!("Connection to rewarder terminated.");
+                  },
+                  websocket::message::Type::Ping => { 
+                     let mut pong_message = Message::pong(message.payload);
+                     sender.send_message(&pong_message);
+                  },
+                  websocket::message::Type::Text => {
+                     let bytes = message.payload.into_owned();
+                     let msg = String::from_utf8(bytes).unwrap();
+                     println!("Received message from rewarder: {}", msg);
+                  },
+                  _ => {}
                }
-      */
+            }
+            Err(e) => {
+               //if no frames available, IOError occurs
+            }
+         }
+      }
+
    }
    pub fn render_frame(&mut self) {
       let width = self.shape.observation_space[0];
@@ -413,6 +419,7 @@ impl Gym {
          duration: self.duration,
          record_dst: self.record_dst.clone(),
          vnc: None,
+         rewarder: None,
          state: GymState {
             screen: vec![0; (ATARI_WIDTH * ATARI_HEIGHT * 3) as usize]
          },
