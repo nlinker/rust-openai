@@ -151,11 +151,15 @@ impl GymRemote {
 
       request.headers.set(auth_header);
       let mut response = request.send().unwrap(); // Send the request and retrieve a response
+
       response.validate().unwrap(); // Validate the response
       let (mut sender, mut receiver) = response.begin().split();
 
-      // websocket receiver nonblocking is bugged, so we'll just put it in it's own thread...
+      //ws library not updated to use nonblocking yet
+      //sender.set_nonblocking(true); 
       //receiver.set_nonblocking(true);
+
+      // websocket receiver nonblocking is bugged, so we'll just put it in it's own thread...
       println!("Recorder websocket is now ready to use at {}", 15900+ self.id); 
 
       let reset_cmd = RewarderCommand{
@@ -176,7 +180,37 @@ impl GymRemote {
       let rst_msg = Message::text(String::from(reset_msg));
       sender.send_message(&rst_msg);
 
-      self.rewarder = Some((sender,receiver));
+      //self.rewarder = Some((sender,receiver));
+
+      thread::spawn(move || {
+         for msg in receiver.incoming_messages() {
+            let msg: Result<websocket::message::Message,_> = msg;
+            match msg {
+               Ok(message) => {
+                  match message.opcode {
+                     websocket::message::Type::Close => {
+                        //agent.close()
+                        println!("Connection to rewarder terminated.");
+                     },
+                     websocket::message::Type::Ping => { 
+                        let mut pong_message = Message::pong(message.payload);
+                        sender.send_message(&pong_message);
+                     },
+                     websocket::message::Type::Text => {
+                        let bytes = message.payload.into_owned();
+                        let msg = String::from_utf8(bytes).unwrap();
+                        println!("Received message from rewarder: {}", msg);
+                     },
+                     _ => {}
+                  }
+               }
+               Err(e) => {
+                  //if no frames available, IOError occurs
+               }
+            }
+         }
+      });
+
    }
    pub fn start_vnc(&mut self) {
       //connect vnc
@@ -215,37 +249,10 @@ impl GymRemote {
    pub fn sync_agent(&mut self) -> () {
    }
    pub fn sync_rewarder(&mut self) -> () {
-      //TODO
-      let mut sr = self.rewarder.as_mut().unwrap();
-      let &mut (ref mut sender, ref mut receiver) = sr;
+      //let mut sr = self.rewarder.as_mut().unwrap();
+      //let &mut (ref mut sender, ref mut receiver) = sr;
 
-      for msg in receiver.incoming_messages() {
-         let msg: Result<websocket::message::Message,_> = msg;
-         match msg {
-            Ok(message) => {
-               match message.opcode {
-                  websocket::message::Type::Close => {
-                     //agent.close()
-                     println!("Connection to rewarder terminated.");
-                  },
-                  websocket::message::Type::Ping => { 
-                     let mut pong_message = Message::pong(message.payload);
-                     sender.send_message(&pong_message);
-                  },
-                  websocket::message::Type::Text => {
-                     let bytes = message.payload.into_owned();
-                     let msg = String::from_utf8(bytes).unwrap();
-                     println!("Received message from rewarder: {}", msg);
-                  },
-                  _ => {}
-               }
-            }
-            Err(e) => {
-               //if no frames available, IOError occurs
-            }
-         }
-      }
-
+      //requires nonblocking before moving into main thread
    }
    pub fn render_frame(&mut self) {
       let width = self.shape.observation_space[0];
