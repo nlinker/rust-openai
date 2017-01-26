@@ -119,22 +119,24 @@ impl GymRemote {
    pub fn start<T: GymMember>(&mut self, mut agent: T) {
       self.start_rewarder();
       self.start_vnc();
-      self.start_agent(agent);
+      let agent = self.start_agent(agent);
 
       loop {
          if self.time.elapsed().as_secs() > self.duration { break; }
          self.sync();
+
+         //TODO sync agent
       }
       self.recorder_cleanup();
    }
-   pub fn sync(&mut self) -> () {
+   pub fn sync(&mut self) {
       self.sync_rewarder();
       self.sync_vnc();
-      self.sync_agent();
    }
-   pub fn start_agent<T: GymMember>(&mut self, mut agent: T) {
+   pub fn start_agent<T: GymMember>(&mut self, mut agent: T) -> T {
       agent.start(&self.shape, &self.state);
       self.time = Instant::now();
+      return agent
    }
    pub fn start_rewarder(&mut self) {
       let ws_url = &format!("ws://127.0.0.1:{}", 15900+self.id)[..];
@@ -245,8 +247,6 @@ impl GymRemote {
          }
       });
       println!("Connected to vnc on port: {}", 5900+self.id);
-   }
-   pub fn sync_agent(&mut self) -> () {
    }
    pub fn sync_rewarder(&mut self) -> () {
       //let mut sr = self.rewarder.as_mut().unwrap();
