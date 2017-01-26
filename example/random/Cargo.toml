@@ -1,0 +1,8 @@
+[package]
+name = "random"
+version = "0.1.0"
+authors = ["andrewjohnson"]
+
+[dependencies]
+rand = "*"
+openai = { path = "../../../rust-openai" }

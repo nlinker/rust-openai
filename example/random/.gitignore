@@ -1,0 +1,5 @@
+.DS_Store
+video.mpg
+target/*
+err.txt
+mov_out
