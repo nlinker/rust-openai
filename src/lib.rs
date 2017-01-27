@@ -375,7 +375,7 @@ impl Gym {
    pub fn set_record(&mut self, dst: String) -> () { self.record_dst = dst.to_string() }
    pub fn new() -> Gym {
       Gym {
-         fps: 10,
+         fps: 20,
          env_id: "gym-core.AirRaid-v0".to_string(),
          max_parallel: 1,
          duration: 180,
