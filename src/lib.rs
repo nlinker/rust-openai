@@ -306,7 +306,7 @@ impl GymRemote {
 
       let mut vnc = self.vnc.as_mut().unwrap();
 
-      vnc.request_update(vnc::Rect { left: 0, top: 0, width: width as u16, height: height as u16}, false).unwrap();
+      //vnc.request_update(vnc::Rect { left: 0, top: 0, width: width as u16, height: height as u16}, false).unwrap();
       for event in vnc.poll_iter() {
          use vnc::client::Event;
          match event {
