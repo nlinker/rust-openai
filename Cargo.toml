@@ -6,7 +6,7 @@ description = "OpenAI client for Rust"
 license = "MIT"
 
 [dependencies]
-mpeg_encoder = "0.2.1"
+ffmpeg-sys = "3.2.0"
 glob = "0.2.11"
 image = "0.12.1"
 rand = "0.3.15"
