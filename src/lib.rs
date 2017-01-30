@@ -16,6 +16,9 @@ use std::sync::mpsc;
 use std::sync::Arc;
 use std::f64;
 
+extern crate mpeg_encoder;
+use mpeg_encoder::{Encoder};
+
 extern crate glob;
 use glob::glob;
 
@@ -273,6 +276,7 @@ impl GymRemote {
       println!("Connected to vnc on port: {}", 5900+self.id);
    }
    pub fn start_recorder(&mut self) {
+      Encoder::new( "video.mpg", self.shape.observation_space[0], self.shape.observation_space[1] );
    }
    pub fn sync_rewarder(&mut self) -> () {
       //let mut sr = self.rewarder.as_mut().unwrap();
