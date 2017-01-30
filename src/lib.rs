@@ -118,6 +118,7 @@ impl GymRemote {
                  .spawn();
    }
    pub fn start<T: GymMember>(&mut self, mut agent: T) {
+      self.start_recorder();
       self.start_rewarder();
       self.start_vnc();
       let mut agent = self.start_agent(agent);
@@ -271,6 +272,8 @@ impl GymRemote {
       });
       println!("Connected to vnc on port: {}", 5900+self.id);
    }
+   pub fn start_recorder(&mut self) {
+   }
    pub fn sync_rewarder(&mut self) -> () {
       //let mut sr = self.rewarder.as_mut().unwrap();
       //let &mut (ref mut sender, ref mut receiver) = sr;
@@ -420,28 +423,8 @@ impl Gym {
       thread::sleep(ten_seconds);
 
    }
-   pub fn remote_prep_recorder(&mut self, pi: u32) {
-      for entry in glob("mov_out/*.png").expect("Failed to read glob pattern") {
-         match entry {
-            Ok(path) => {
-               fs::remove_file(path);
-            }
-            Err(e) => {}
-         }
-      }
-      for entry in glob("*.mpg").expect("Failed to read glob pattern") {
-         match entry {
-            Ok(path) => {
-               fs::remove_file(path);
-            }
-            Err(e) => {}
-         }
-      }
-      fs::create_dir("mov_out/");
-   }
    pub fn start_remote(&mut self, pi: u32) -> GymRemote {
       self.remote_prep_container(pi);
-      self.remote_prep_recorder(pi);
       let r = GymRemote {
          id: pi,
          fps: self.fps,
