@@ -4,7 +4,6 @@ use std::time::{Duration, Instant};
 use std::cmp::{max, min};
 use std::fs;
 use std::fs::File;
-use std::path::Path;
 use std::string::String;
 use std::io::prelude::*;
 use std::io::stdout;
@@ -15,9 +14,15 @@ use std::iter::repeat;
 use std::sync::mpsc;
 use std::sync::Arc;
 use std::f64;
+use std::ptr;
+use std::mem;
+use std::iter;
+use std::path::{Path, PathBuf};
 
-extern crate mpeg_encoder;
-use mpeg_encoder::{Encoder};
+extern crate ffmpeg_sys;
+use ffmpeg_sys::{SwsContext, AVCodec, AVCodecContext, AVPacket, AVFormatContext, AVStream,
+                 AVFrame, AVRational, AVPixelFormat, AVPicture, AVCodecID};
+
 
 extern crate glob;
 use glob::glob;
@@ -103,6 +108,27 @@ struct RewarderCommand {
    method: String,
    body: RCBody,
    headers: RCHeaders
+}
+
+pub struct MpegEncoder {
+    tmp_frame_buf:    Vec<u8>,
+    frame_buf:        Vec<u8>,
+    curr_frame_index: usize,
+    initialized:      bool,
+    bit_rate:         usize,
+    target_width:     usize,
+    target_height:    usize,
+    time_base:        (usize, usize),
+    gop_size:         usize,
+    max_b_frames:     usize,
+    pix_fmt:          AVPixelFormat,
+    tmp_frame:        *mut AVFrame,
+    frame:            *mut AVFrame,
+    context:          *mut AVCodecContext,
+    format_context:   *mut AVFormatContext,
+    video_st:         *mut AVStream,
+    scale_context:    *mut SwsContext,
+    path:             PathBuf
 }
 
 const ATARI_HEIGHT: u32 = 262;
@@ -276,7 +302,20 @@ impl GymRemote {
       println!("Connected to vnc on port: {}", 5900+self.id);
    }
    pub fn start_recorder(&mut self) {
-      Encoder::new( "video.mpg", self.shape.observation_space[0], self.shape.observation_space[1] );
+      let width = self.shape.observation_space[0];
+      let height = self.shape.observation_space[1];
+      let name = "video.mpg";
+
+      unsafe {
+         ffmpeg_sys::av_register_all();
+      }
+
+      let bit_rate     = 400000;
+      let time_base    = (1, 60);
+      let gop_size     = 10;
+      let max_b_frames = 1;
+      let pix_fmt      = AVPixelFormat::AV_PIX_FMT_YUV420P;
+
    }
    pub fn sync_rewarder(&mut self) -> () {
       //let mut sr = self.rewarder.as_mut().unwrap();
