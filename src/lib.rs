@@ -86,6 +86,10 @@ pub struct GymRemote {
    frame: u32
 }
 pub struct MpegEncoder {
+    frame_format: i32,
+    frame_width: i32,
+    frame_height: i32,
+    frame_pts: i32,
     tmp_frame_buf:    Vec<u8>,
     frame_buf:        Vec<u8>,
     curr_frame_index: usize,
@@ -96,8 +100,8 @@ pub struct MpegEncoder {
     gop_size:         usize,
     max_b_frames:     usize,
     pix_fmt:          AVPixelFormat,
-    tmp_frame:        *mut AVFrame,
-    frame:            *mut AVFrame,
+    tmp_frame:        *mut AVPicture,
+    frame:            *mut AVPicture,
     context:          *mut AVCodecContext,
     format_context:   *mut AVFormatContext,
     video_st:         *mut AVStream,
@@ -117,6 +121,10 @@ impl MpegEncoder {
       let height       = if height % 2 == 0 { height } else { height + 1 };
 
       return MpegEncoder {
+            frame_format:     0,
+            frame_width:      0,
+            frame_height:     0,
+            frame_pts:        0,
             curr_frame_index: 0,
             bit_rate:         bit_rate,
             target_width:     width,
@@ -466,17 +474,16 @@ impl GymRemote {
              * Init the destination video frame.
              */
 
-            //PROBLEM
-            (*mp.frame).format = (*mp.context).pix_fmt as i32;
-            (*mp.frame).width  = (*mp.context).width;
-            (*mp.frame).height = (*mp.context).height;
-            (*mp.frame).pts    = 0;
+            mp.frame_format=(*mp.context).pix_fmt as i32;
+            mp.frame_width=(*mp.context).width;
+            mp.frame_height=(*mp.context).height;
+            mp.frame_pts = 0;
 
 
             /*
 
             // alloc the buffer
-            let nframe_bytes = ffmpeg_sys::avpicture_get_size(mp.pix_fmt,
+            let nframe_bytes = ffmpeg_sys::avpicture_get_size((*mp.context).pix_fmt as i32,
                                                               mp.target_width as i32,
                                                               mp.target_height as i32);
                       let reps = iter::repeat(0u8).take(nframe_bytes as usize);
