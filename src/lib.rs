@@ -80,6 +80,59 @@ pub struct GymRemote {
    time: Instant,
    frame: u32
 }
+pub struct MpegEncoder {
+    tmp_frame_buf:    Vec<u8>,
+    frame_buf:        Vec<u8>,
+    curr_frame_index: usize,
+    bit_rate:         usize,
+    target_width:     usize,
+    target_height:    usize,
+    time_base:        (usize, usize),
+    gop_size:         usize,
+    max_b_frames:     usize,
+    pix_fmt:          AVPixelFormat,
+    tmp_frame:        *mut AVFrame,
+    frame:            *mut AVFrame,
+    context:          *mut AVCodecContext,
+    format_context:   *mut AVFormatContext,
+    video_st:         *mut AVStream,
+    scale_context:    *mut SwsContext,
+    path:             PathBuf
+}
+impl MpegEncoder {
+   pub fn new(path: String, width: usize, height: usize) -> MpegEncoder {
+      let mut pathbuf = PathBuf::new(); pathbuf.push(path);;
+
+      let bit_rate     = 400000;
+      let time_base    = (1, 60);
+      let gop_size     = 10;
+      let max_b_frames = 1;
+      let pix_fmt      = AVPixelFormat::AV_PIX_FMT_YUV420P;
+      let width        = if width  % 2 == 0 { width }  else { width + 1 };
+      let height       = if height % 2 == 0 { height } else { height + 1 };
+
+      return MpegEncoder {
+            curr_frame_index: 0,
+            bit_rate:         bit_rate,
+            target_width:     width,
+            target_height:    height,
+            time_base:        time_base,
+            gop_size:         gop_size,
+            max_b_frames:     max_b_frames,
+            pix_fmt:          pix_fmt,
+            frame:            ptr::null_mut(),
+            tmp_frame:        ptr::null_mut(),
+            context:          ptr::null_mut(),
+            scale_context:    ptr::null_mut(),
+            format_context:   ptr::null_mut(),
+            video_st:         ptr::null_mut(),
+            path:             pathbuf,
+            frame_buf:        Vec::new(),
+            tmp_frame_buf:    Vec::new()
+      }
+   }
+}
+
 
 pub struct Gym {
    fps: u32,
@@ -110,33 +163,13 @@ struct RewarderCommand {
    headers: RCHeaders
 }
 
-pub struct MpegEncoder {
-    tmp_frame_buf:    Vec<u8>,
-    frame_buf:        Vec<u8>,
-    curr_frame_index: usize,
-    initialized:      bool,
-    bit_rate:         usize,
-    target_width:     usize,
-    target_height:    usize,
-    time_base:        (usize, usize),
-    gop_size:         usize,
-    max_b_frames:     usize,
-    pix_fmt:          AVPixelFormat,
-    tmp_frame:        *mut AVFrame,
-    frame:            *mut AVFrame,
-    context:          *mut AVCodecContext,
-    format_context:   *mut AVFormatContext,
-    video_st:         *mut AVStream,
-    scale_context:    *mut SwsContext,
-    path:             PathBuf
-}
-
 const ATARI_HEIGHT: u32 = 262;
 const ATARI_WIDTH: u32 = 160;
 
 impl GymRemote {
    pub fn recorder_cleanup(&mut self) -> () {
       let real_fps = self.frame / max(self.time.elapsed().as_secs() as u32, 1);
+      println!("frames: {}", self.frame);
       Command::new("ffmpeg")
                  .arg("-r").arg(format!("{}", real_fps))
                  .arg("-f").arg("image2")
@@ -147,7 +180,7 @@ impl GymRemote {
                  .spawn();
    }
    pub fn start<T: GymMember>(&mut self, mut agent: T) {
-      self.start_recorder();
+      let mut capture = self.start_recorder();
       self.start_rewarder();
       self.start_vnc();
       let mut agent = self.start_agent(agent);
@@ -301,21 +334,12 @@ impl GymRemote {
       });
       println!("Connected to vnc on port: {}", 5900+self.id);
    }
-   pub fn start_recorder(&mut self) {
+   pub fn start_recorder(&mut self) -> MpegEncoder {
       let width = self.shape.observation_space[0];
       let height = self.shape.observation_space[1];
       let name = "video.mpg";
 
-      unsafe {
-         ffmpeg_sys::av_register_all();
-      }
-
-      let bit_rate     = 400000;
-      let time_base    = (1, 60);
-      let gop_size     = 10;
-      let max_b_frames = 1;
-      let pix_fmt      = AVPixelFormat::AV_PIX_FMT_YUV420P;
-
+      return MpegEncoder::new(name, width, height)
    }
    pub fn sync_rewarder(&mut self) -> () {
       //let mut sr = self.rewarder.as_mut().unwrap();
@@ -327,6 +351,7 @@ impl GymRemote {
       let width = self.shape.observation_space[0];
       let height = self.shape.observation_space[1];
 
+      /*
       let mut imgbuf = image::ImageBuffer::new( width as u32, height as u32 );
 
       for x in 0 .. width {
@@ -339,6 +364,7 @@ impl GymRemote {
      
       let ref mut fout = File::create(&Path::new( &format!("mov_out/frame_{}.png", self.frame)[..] )).unwrap();
       let _ = image::ImageRgb8(imgbuf).save(fout, image::PNG);
+      */
 
       self.frame = self.frame + 1;
    }
