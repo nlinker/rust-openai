@@ -499,6 +499,7 @@ impl GymRemote {
 
             (*mp.frame).format = (*mp.context).pix_fmt as i32;
             // the rest (width, height, data, linesize) are set at the moment of the snapshot.
+            */
 
             // Open the output file.
             static AVIO_FLAG_WRITE: i32 = 2; // XXX: this should be defined by the bindings.
@@ -513,7 +514,6 @@ impl GymRemote {
             if ret < 0 {
                 panic!("Could not allocate raw picture buffer");
             }
-            */
 
       }
 
