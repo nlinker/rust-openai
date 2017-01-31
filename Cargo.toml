@@ -7,6 +7,7 @@ license = "MIT"
 categories = ["api-bindings", "emulators", "game-engines", "games", "multimedia"]
 
 [dependencies]
+libc = "0.2.20"
 ffmpeg-sys = "3.2.0"
 glob = "0.2.11"
 image = "0.12.1"

@@ -18,6 +18,11 @@ use std::ptr;
 use std::mem;
 use std::iter;
 use std::path::{Path, PathBuf};
+use std::ffi::CString;
+use std::iter::FromIterator;
+
+extern crate libc;
+use libc::c_void;
 
 extern crate ffmpeg_sys;
 use ffmpeg_sys::{SwsContext, AVCodec, AVCodecContext, AVPacket, AVFormatContext, AVStream,
@@ -167,17 +172,43 @@ const ATARI_HEIGHT: u32 = 262;
 const ATARI_WIDTH: u32 = 160;
 
 impl GymRemote {
-   pub fn recorder_cleanup(&mut self) -> () {
+   pub fn recorder_cleanup(&mut self, mp: MpegEncoder) -> () {
       let real_fps = self.frame / max(self.time.elapsed().as_secs() as u32, 1);
-      println!("frames: {}", self.frame);
-      Command::new("ffmpeg")
-                 .arg("-r").arg(format!("{}", real_fps))
-                 .arg("-f").arg("image2")
-                 .arg("-i").arg("mov_out/frame_%0d.png")
-                 .arg("-r").arg("24")
-                 .arg("-pix_fmt").arg("yuv420p")
-                 .arg(self.record_dst.clone())
-                 .spawn();
+
+                  // Get the delayed frames.
+            let mut pkt: AVPacket = unsafe { mem::uninitialized() };
+            let mut got_output = 1;
+            while got_output != 0 {
+                let ret;
+
+                unsafe {
+                    ffmpeg_sys::av_init_packet(&mut pkt);
+                }
+
+                pkt.data = ptr::null_mut();  // packet data will be allocated by the encoder
+                pkt.size = 0;
+
+                unsafe {
+                    ret = ffmpeg_sys::avcodec_encode_video2(mp.context, &mut pkt, ptr::null(), &mut got_output);
+                }
+
+                if ret < 0 {
+                    panic!("Error encoding frame.");
+                }
+
+                if got_output != 0 {
+                    unsafe {
+                        let _ = ffmpeg_sys::av_interleaved_write_frame(mp.format_context, &mut pkt);
+                        ffmpeg_sys::av_free_packet(&mut pkt);
+                    }
+                }
+            }
+
+            // Free things and stuffs.
+            unsafe {
+                let _ = ffmpeg_sys::avcodec_close(mp.context);
+                ffmpeg_sys::av_free(mp.context as *mut c_void);
+            }
    }
    pub fn start<T: GymMember>(&mut self, mut agent: T) {
       let mut capture = self.start_recorder();
@@ -213,7 +244,7 @@ impl GymRemote {
             }
          }
       }
-      self.recorder_cleanup();
+      self.recorder_cleanup(capture);
    }
    pub fn sync(&mut self) {
       self.sync_rewarder();
@@ -337,9 +368,142 @@ impl GymRemote {
    pub fn start_recorder(&mut self) -> MpegEncoder {
       let width = self.shape.observation_space[0];
       let height = self.shape.observation_space[1];
-      let name = "video.mpg";
+      let name = "video.mpg".to_string();
 
-      return MpegEncoder::new(name, width, height)
+      let mut mp = MpegEncoder::new(name, width, height);
+
+      unsafe {
+         ffmpeg_sys::av_register_all();
+      }
+
+      let path_str = CString::new(mp.path.to_str().unwrap()).unwrap();
+      unsafe {
+            // try to guess the container type from the path.
+            let mut fmt = ptr::null_mut();
+            
+
+            let _ = ffmpeg_sys::avformat_alloc_output_context2(&mut fmt, ptr::null_mut(), ptr::null(), path_str.as_ptr());
+
+            if mp.format_context.is_null() {
+                // could not guess, default to MPEG
+                let mpeg = CString::new(&b"mpeg"[..]).unwrap();
+                
+                let _ = ffmpeg_sys::avformat_alloc_output_context2(&mut fmt, ptr::null_mut(), mpeg.as_ptr(), path_str.as_ptr());
+            }
+
+            mp.format_context = fmt;
+
+            if mp.format_context.is_null() {
+                panic!("Unable to create the output context.");
+            }
+
+            let fmt = (*mp.format_context).oformat;
+
+            if (*fmt).video_codec == AVCodecID::AV_CODEC_ID_NONE {
+                panic!("The selected output container does not support video encoding.")
+            }
+
+            let codec: *mut AVCodec;
+
+            let ret: i32 = 0;
+
+            codec = ffmpeg_sys::avcodec_find_encoder((*fmt).video_codec);
+
+            if codec.is_null() {
+                panic!("Codec not found.");
+            }
+
+            mp.video_st = ffmpeg_sys::avformat_new_stream(mp.format_context, codec);
+
+            if mp.video_st.is_null() {
+                panic!("Failed to allocate the video stream.");
+            }
+
+            (*mp.video_st).id = ((*mp.format_context).nb_streams - 1) as i32;
+
+            mp.context = (*mp.video_st).codec;
+
+            let _ = ffmpeg_sys::avcodec_get_context_defaults3(mp.context, codec);
+
+            if mp.context.is_null() {
+                panic!("Could not allocate video codec context.");
+            }
+
+            // sws scaling context
+            mp.scale_context = ffmpeg_sys::sws_getContext(
+                mp.target_width as i32, mp.target_height as i32, AVPixelFormat::AV_PIX_FMT_RGB24,
+                mp.target_width as i32, mp.target_height as i32, mp.pix_fmt,
+                ffmpeg_sys::SWS_BICUBIC as i32, ptr::null_mut(), ptr::null_mut(), ptr::null());
+
+            // Put sample parameters.
+            (*mp.context).bit_rate = mp.bit_rate as i64;
+
+            // Resolution must be a multiple of two.
+            (*mp.context).width    = mp.target_width  as i32;
+            (*mp.context).height   = mp.target_height as i32;
+
+            // frames per second.
+            let (tnum, tdenum)           = mp.time_base;
+            (*mp.context).time_base    = AVRational { num: tnum as i32, den: tdenum as i32 };
+            (*mp.video_st).time_base   = (*mp.context).time_base;
+            (*mp.context).gop_size     = mp.gop_size as i32;
+            (*mp.context).max_b_frames = mp.max_b_frames as i32;
+            (*mp.context).pix_fmt      = mp.pix_fmt;
+
+            if (*mp.context).codec_id == AVCodecID::AV_CODEC_ID_MPEG1VIDEO {
+                // Needed to avoid using macroblocks in which some coeffs overflow.
+                // This does not happen with normal video, it just happens here as
+                // the motion of the chroma plane does not match the luma plane.
+                (*mp.context).mb_decision = 2;
+            }
+
+            if ffmpeg_sys::avcodec_open2(mp.context, codec, ptr::null_mut()) < 0 {
+                panic!("Could not open the codec.");
+            }
+
+            /*
+             * Init the destination video frame.
+             */
+
+            (*mp.frame).format = (*mp.context).pix_fmt as i32;
+            (*mp.frame).width  = (*mp.context).width;
+            (*mp.frame).height = (*mp.context).height;
+            (*mp.frame).pts    = 0;
+
+            // alloc the buffer
+            let nframe_bytes = ffmpeg_sys::avpicture_get_size(mp.pix_fmt,
+                                                              mp.target_width as i32,
+                                                              mp.target_height as i32);
+                      let reps = iter::repeat(0u8).take(nframe_bytes as usize);
+            mp.frame_buf = Vec::<u8>::from_iter(reps);
+            //mp.frame_buf = Vec::from_elem(nframe_bytes as usize, 0u8);
+
+            let _ = ffmpeg_sys::avpicture_fill(mp.frame as *mut AVPicture,
+                                               mp.frame_buf.get(0).unwrap(),
+                                               mp.pix_fmt,
+                                               mp.target_width as i32,
+                                               mp.target_height as i32);
+
+
+            (*mp.frame).format = (*mp.context).pix_fmt as i32;
+            // the rest (width, height, data, linesize) are set at the moment of the snapshot.
+
+            // Open the output file.
+            static AVIO_FLAG_WRITE: i32 = 2; // XXX: this should be defined by the bindings.
+            if ffmpeg_sys::avio_open(&mut (*mp.format_context).pb, path_str.as_ptr(), AVIO_FLAG_WRITE) < 0 {
+                panic!("Failed to open the output file.");
+            }
+
+            if ffmpeg_sys::avformat_write_header(mp.format_context, ptr::null_mut()) < 0 {
+                panic!("Failed to open the output file.");
+            }
+
+            if ret < 0 {
+                panic!("Could not allocate raw picture buffer");
+            }
+      }
+
+      return mp;
    }
    pub fn sync_rewarder(&mut self) -> () {
       //let mut sr = self.rewarder.as_mut().unwrap();
