@@ -1,9 +1,10 @@
 [package]
 name = "openai"
-version = "0.2.0"
+version = "0.2.1"
 authors = ["Andrew <andrew@subarctic.org>"]
 description = "OpenAI client for Rust"
 license = "MIT"
+categories = ["api-bindings", "emulators", "game-engines", "games", "multimedia"]
 
 [dependencies]
 ffmpeg-sys = "3.2.0"
