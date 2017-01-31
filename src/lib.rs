@@ -429,6 +429,7 @@ impl GymRemote {
                 panic!("Could not allocate video codec context.");
             }
 
+
             // sws scaling context
             mp.scale_context = ffmpeg_sys::sws_getContext(
                 mp.target_width as i32, mp.target_height as i32, AVPixelFormat::AV_PIX_FMT_RGB24,
@@ -465,10 +466,14 @@ impl GymRemote {
              * Init the destination video frame.
              */
 
+            //PROBLEM
             (*mp.frame).format = (*mp.context).pix_fmt as i32;
             (*mp.frame).width  = (*mp.context).width;
             (*mp.frame).height = (*mp.context).height;
             (*mp.frame).pts    = 0;
+
+
+            /*
 
             // alloc the buffer
             let nframe_bytes = ffmpeg_sys::avpicture_get_size(mp.pix_fmt,
@@ -501,6 +506,8 @@ impl GymRemote {
             if ret < 0 {
                 panic!("Could not allocate raw picture buffer");
             }
+            */
+
       }
 
       return mp;
