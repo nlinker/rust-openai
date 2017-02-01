@@ -59,6 +59,8 @@ pub trait GymMember {
    fn close (&mut self) -> ();
 }
 pub struct GymRemote {
+   black_screen: bool,
+   dirty: bool,
    id: u32,
    fps: u32,
    env_id: String,
@@ -281,18 +283,25 @@ impl GymRemote {
       let width = self.shape.observation_space[0];
       let height = self.shape.observation_space[1];
 
-      let mut imgbuf = image::ImageBuffer::new( width as u32, height as u32 );
+      if self.dirty {
+         let mut imgbuf = image::ImageBuffer::new( width as u32, height as u32 );
 
-      for x in 0 .. width {
-         for y in 0 .. height {
-            let left = 3*(y * width + x) as usize;
-            let pixels = &self.state.screen;
-            imgbuf.put_pixel(x as u32, y as u32, image::Rgb([ pixels[left], pixels[left+1], pixels[left+2] ]));
+         for x in 0 .. width {
+            for y in 0 .. height {
+               let left = 3*(y * width + x) as usize;
+               let pixels = &self.state.screen;
+               imgbuf.put_pixel(x as u32, y as u32, image::Rgb([ pixels[left], pixels[left+1], pixels[left+2] ]));
+            }
          }
+
+         let ref mut fout = File::create(&Path::new( &format!("mov_out/frame_{}.png", self.frame)[..] )).unwrap();
+         let _ = image::ImageRgb8(imgbuf).save(fout, image::PNG);
+         self.dirty = false;
+      } else {
+         let from_p = format!("mov_out/frame_{}.png", self.frame-1);
+         let to_p = format!("mov_out/frame_{}.png", self.frame);
+         std::fs::copy(Path::new(&from_p), Path::new(&to_p));
       }
-     
-      let ref mut fout = File::create(&Path::new( &format!("mov_out/frame_{}.png", self.frame)[..] )).unwrap();
-      let _ = image::ImageRgb8(imgbuf).save(fout, image::PNG);
 
       self.frame = self.frame + 1;
    }
@@ -310,20 +319,25 @@ impl GymRemote {
       for event in vnc.poll_iter() {
          use vnc::client::Event;
          match event {
+            Event::EndOfFrame => {
+               if !self.black_screen {
+                  self.dirty = true;
+               }
+            },
             Event::PutPixels(vnc_rect, ref pixels) => {
-               let mut black_screen = true;
+               self.black_screen = true;
                for x in vnc_rect.left .. min(width as u16, (vnc_rect.left+vnc_rect.width)) {
                   for y in vnc_rect.top .. min(height as u16, (vnc_rect.top+vnc_rect.height)) {
                      let i = x - vnc_rect.left;
                      let j = y - vnc_rect.top;
                      let left = 4*(j * vnc_rect.width + i) as usize;
-                     if pixels[left]>20 { black_screen = false }
-                     if pixels[left+1]>20 { black_screen = false }
-                     if pixels[left+2]>20 { black_screen = false }
+                     if pixels[left]>20 { self.black_screen = false }
+                     if pixels[left+1]>20 { self.black_screen = false }
+                     if pixels[left+2]>20 { self.black_screen = false }
                   }
                }
 
-               if !black_screen {
+               if !self.black_screen {
                for x in vnc_rect.left .. min(width as u16, (vnc_rect.left+vnc_rect.width)) {
                   for y in vnc_rect.top .. min(height as u16, (vnc_rect.top+vnc_rect.height)) {
                      let i = x - vnc_rect.left;
@@ -443,6 +457,8 @@ impl Gym {
       self.remote_prep_container(pi);
       self.remote_prep_recorder(pi);
       let r = GymRemote {
+         black_screen: false,
+         dirty: true,
          id: pi,
          fps: self.fps,
          env_id: format!("{: <99}", self.env_id).clone(),
