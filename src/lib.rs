@@ -183,6 +183,8 @@ impl GymRemote {
    pub fn recorder_cleanup(&mut self, mp: MpegEncoder) -> () {
       let real_fps = self.frame / max(self.time.elapsed().as_secs() as u32, 1);
 
+            /*
+
                   // Get the delayed frames.
             let mut pkt: AVPacket = unsafe { mem::uninitialized() };
             let mut got_output = 1;
@@ -211,6 +213,9 @@ impl GymRemote {
                     }
                 }
             }
+            // alloc the buffer
+            let reps = iter::repeat(0u8).take(nframe_bytes as usize);
+            */
 
             // Free things and stuffs.
             unsafe {
@@ -230,7 +235,6 @@ impl GymRemote {
          self.sync();
          let mut vnc = self.vnc.as_mut().unwrap();
 
-         //TODO sync agent moves
          let action = agent.tick();
          if self.mode=="atari" {
             if action==0 {
@@ -480,26 +484,26 @@ impl GymRemote {
             mp.frame_pts = 0;
 
 
-            /*
-
-            // alloc the buffer
-            let nframe_bytes = ffmpeg_sys::avpicture_get_size((*mp.context).pix_fmt as i32,
+            let nframe_bytes = ffmpeg_sys::avpicture_get_size(mp.pix_fmt,
                                                               mp.target_width as i32,
                                                               mp.target_height as i32);
-                      let reps = iter::repeat(0u8).take(nframe_bytes as usize);
-            mp.frame_buf = Vec::<u8>::from_iter(reps);
-            //mp.frame_buf = Vec::from_elem(nframe_bytes as usize, 0u8);
 
-            let _ = ffmpeg_sys::avpicture_fill(mp.frame as *mut AVPicture,
+
+            /* NEXT segfaults here
+            let reps = iter::repeat(0u8).take(nframe_bytes as usize);
+            mp.frame_buf = Vec::<u8>::from_iter(reps);
+            ffmpeg_sys::avpicture_alloc(mp.frame, mp.pix_fmt, mp.target_width as i32, mp.target_height as i32);
+            */
+
+            //TODO
+            /*
+            let _ = ffmpeg_sys::avpicture_fill(mp.frame,
                                                mp.frame_buf.get(0).unwrap(),
                                                mp.pix_fmt,
                                                mp.target_width as i32,
                                                mp.target_height as i32);
 
-
             (*mp.frame).format = (*mp.context).pix_fmt as i32;
-            // the rest (width, height, data, linesize) are set at the moment of the snapshot.
-            */
 
             // Open the output file.
             static AVIO_FLAG_WRITE: i32 = 2; // XXX: this should be defined by the bindings.
@@ -514,6 +518,9 @@ impl GymRemote {
             if ret < 0 {
                 panic!("Could not allocate raw picture buffer");
             }
+
+            */
+
 
       }
 
